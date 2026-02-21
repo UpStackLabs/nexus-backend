@@ -5,6 +5,5 @@ import { HistoricalService } from './historical.service.js';
 @Module({
   controllers: [HistoricalController],
   providers: [HistoricalService],
-  exports: [HistoricalService],
 })
 export class HistoricalModule {}

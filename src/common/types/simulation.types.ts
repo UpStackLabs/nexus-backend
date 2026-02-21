@@ -1,18 +1,5 @@
-import type { EventType } from './event.types.js';
 import type { ShockScore } from './shock.types.js';
 import type { HeatmapEntry, ConnectionArc } from './globe.types.js';
-
-export interface SimulationRequest {
-  title: string;
-  description: string;
-  type: EventType;
-  severity: number;
-  location: {
-    lat: number;
-    lng: number;
-    country: string;
-  };
-}
 
 export interface SimulationResult {
   simulatedEventId: string;

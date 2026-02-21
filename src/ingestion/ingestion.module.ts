@@ -9,7 +9,6 @@ import { IngestionController } from './ingestion.controller.js';
 @Module({
   imports: [NlpModule, VectorDbModule, GatewayModule],
   providers: [IngestionService, NewsIngestionService],
-  exports: [IngestionService],
   controllers: [IngestionController],
 })
 export class IngestionModule {}

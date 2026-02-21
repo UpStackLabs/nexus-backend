@@ -15,7 +15,6 @@ import { MarketDataModule } from './market-data/market-data.module.js';
 import { ShockEngineModule } from './shock-engine/shock-engine.module.js';
 import { HealthModule } from './health/health.module.js';
 import { ChatModule } from './chat/chat.module.js';
-import { VisionModule } from './vision/vision.module.js';
 import { OsintModule } from './osint/osint.module.js';
 
 @Module({
@@ -36,7 +35,6 @@ import { OsintModule } from './osint/osint.module.js';
     SectorsModule,
     HistoricalModule,
     ChatModule,
-    VisionModule,
     OsintModule,
   ],
 })

@@ -9,6 +9,5 @@ import { NlpModule } from '../nlp/nlp.module.js';
   imports: [MarketDataModule, ShockEngineModule, NlpModule],
   controllers: [StocksController],
   providers: [StocksService],
-  exports: [StocksService],
 })
 export class StocksModule {}

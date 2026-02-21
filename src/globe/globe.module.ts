@@ -5,6 +5,5 @@ import { GlobeService } from './globe.service.js';
 @Module({
   controllers: [GlobeController],
   providers: [GlobeService],
-  exports: [GlobeService],
 })
 export class GlobeModule {}

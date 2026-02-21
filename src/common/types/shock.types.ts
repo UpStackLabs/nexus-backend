@@ -24,17 +24,3 @@ export interface ShockScore {
   confidence: number;
   direction: 'up' | 'down';
 }
-
-export interface ShockScoreWeights {
-  alpha: number; // similarity weight
-  beta: number; // historical sensitivity weight
-  gamma: number; // geographic proximity weight
-  delta: number; // supply chain weight
-}
-
-export interface InterlinkednessScore {
-  eventId: string;
-  score: number;
-  affectedAssetCount: number;
-  averagePairwiseCorrelation: number;
-}

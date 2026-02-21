@@ -26,20 +26,3 @@ export interface ShockEvent {
   affectedTickers: string[];
   isSimulated: boolean;
 }
-
-export interface EventWithShocks extends ShockEvent {
-  shocks: EventShock[];
-}
-
-export interface EventShock {
-  ticker: string;
-  companyName: string;
-  sector: string;
-  country: string;
-  shockScore: number;
-  predictedChange: number;
-  actualChange: number | null;
-  surpriseFactor: number | null;
-  direction: 'up' | 'down';
-  confidence: number;
-}

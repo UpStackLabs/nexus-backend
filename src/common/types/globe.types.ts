@@ -24,12 +24,6 @@ export interface ConnectionArc {
   sector?: string;
 }
 
-export interface GlobeData {
-  heatmap: HeatmapEntry[];
-  arcs: ConnectionArc[];
-  eventMarkers: EventMarker[];
-}
-
 export interface EventMarker {
   id: string;
   lat: number;
