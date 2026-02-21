@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SEED_STOCKS, SEED_SHOCKS } from '../common/data/seed-data.js';
 import type {
   Stock,
@@ -7,16 +7,23 @@ import type {
   SurpriseAnalysis,
   SurpriseEntry,
   StockAnalysis,
+  PredictionPoint,
+  PredictionResult,
+  ShockFactor,
 } from '../common/types/index.js';
 import type { QueryStocksDto } from './dto/query-stocks.dto.js';
 import { MarketDataService } from '../market-data/market-data.service.js';
 import { ShockEngineService } from '../shock-engine/shock-engine.service.js';
+import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 
 @Injectable()
 export class StocksService {
+  private readonly logger = new Logger(StocksService.name);
+
   constructor(
     private readonly marketData: MarketDataService,
     private readonly shockEngine: ShockEngineService,
+    private readonly nlp: SphinxNlpService,
   ) {}
 
   findAll(query: QueryStocksDto): {
@@ -242,5 +249,133 @@ export class StocksService {
       isAnomaly,
       recentSurprises,
     };
+  }
+
+  async predictTrajectory(ticker: string, days: number): Promise<PredictionResult> {
+    const stock = SEED_STOCKS.find(
+      (s) => s.ticker.toLowerCase() === ticker.toLowerCase(),
+    );
+    if (!stock) {
+      throw new NotFoundException(`Stock with ticker "${ticker}" not found`);
+    }
+
+    // 1. Get current price
+    const livePrice = await this.marketData.getPrice(ticker.toUpperCase());
+    const currentPrice = livePrice.price;
+
+    // 2. Compute shock analysis
+    const { relevantEvents, shockAnalysis } =
+      await this.shockEngine.computeAnalysis(stock, currentPrice);
+
+    // 3. Build shock factors
+    const shockFactors: ShockFactor[] = relevantEvents.slice(0, 5).map((e) => ({
+      eventTitle: e.title,
+      type: e.type,
+      severity: e.severity,
+      impactScore: parseFloat((e.vectorSimilarity * shockAnalysis.compositeShockScore).toFixed(3)),
+      direction: shockAnalysis.direction,
+    }));
+
+    // 4. Generate 30-day forward trajectory
+    //    Shock-adjusted drift with exponential decay + stochastic volatility
+    const { compositeShockScore, predictedPriceChange, confidence, direction } = shockAnalysis;
+    const dailyDrift = (predictedPriceChange / 100) / days;
+    const dailyVol = Math.max(
+      0.005,
+      Math.min(0.04, Math.abs(stock.priceChangePercent) / 100 || 0.015),
+    );
+
+    // Deterministic PRNG seeded by ticker + today's date for reproducibility
+    const today = new Date().toISOString().slice(0, 10);
+    const seedVal = `${ticker}${today}`
+      .split('')
+      .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    let state = seedVal;
+    const rng = () => {
+      state |= 0;
+      state = (state + 0x6d2b79f5) | 0;
+      let z = Math.imul(state ^ (state >>> 15), 1 | state);
+      z = (z ^ (z + Math.imul(z ^ (z >>> 7), 61 | z))) >>> 0;
+      return z / 0x100000000;
+    };
+
+    const trajectory: PredictionPoint[] = [];
+    let price = currentPrice;
+    const now = new Date();
+
+    for (let i = 1; i <= days; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() + i);
+
+      // Exponential decay of shock influence
+      const shockDecay = Math.exp(-i / (days * 0.4));
+      const shockDrift = dailyDrift * shockDecay * compositeShockScore * 10;
+      const directionSign = direction === 'up' ? 1 : -1;
+
+      // GBM step with shock adjustment
+      const randomShock = dailyVol * (rng() * 2 - 1);
+      price = price * (1 + shockDrift * directionSign + randomShock);
+      price = Math.max(price, 0.01);
+
+      // Confidence band widens over time
+      const bandWidth = currentPrice * dailyVol * Math.sqrt(i) * (2 - confidence);
+
+      trajectory.push({
+        date: date.toISOString().slice(0, 10),
+        price: Math.round(price * 100) / 100,
+        upper: Math.round((price + bandWidth) * 100) / 100,
+        lower: Math.round(Math.max(0.01, price - bandWidth) * 100) / 100,
+      });
+    }
+
+    // 5. Generate AI narrative
+    const aiSummary = await this.generatePredictionNarrative(
+      stock,
+      currentPrice,
+      trajectory,
+      shockAnalysis,
+      relevantEvents,
+    );
+
+    return {
+      ticker: stock.ticker,
+      companyName: stock.companyName,
+      currentPrice,
+      trajectory,
+      shockFactors,
+      aiSummary,
+      confidence: shockAnalysis.confidence,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  private async generatePredictionNarrative(
+    stock: Stock,
+    currentPrice: number,
+    trajectory: PredictionPoint[],
+    shockAnalysis: any,
+    relevantEvents: any[],
+  ): Promise<string> {
+    const lastPoint = trajectory[trajectory.length - 1];
+    const priceChange = ((lastPoint.price - currentPrice) / currentPrice * 100).toFixed(1);
+    const eventSummary = relevantEvents
+      .slice(0, 3)
+      .map((e) => `${e.title} (severity ${e.severity}/10)`)
+      .join('; ');
+
+    const prompt = `You are a financial analyst. Write a concise 2-3 sentence prediction summary for ${stock.companyName} (${stock.ticker}).
+Current price: $${currentPrice}. Predicted ${trajectory.length}-day price: $${lastPoint.price} (${priceChange}%).
+Shock score: ${shockAnalysis.compositeShockScore}, risk level: ${shockAnalysis.riskLevel}.
+Key events: ${eventSummary}.
+Focus on the key drivers and risk factors. Be direct and quantitative.`;
+
+    try {
+      const narrative = await this.nlp.generateText(prompt);
+      return narrative;
+    } catch {
+      this.logger.debug('AI narrative generation failed, using template');
+      const direction = parseFloat(priceChange) >= 0 ? 'upward' : 'downward';
+      return `${stock.companyName} is projected to move ${direction} by ${Math.abs(parseFloat(priceChange))}% over the next ${trajectory.length} days, driven by a composite shock score of ${shockAnalysis.compositeShockScore} (${shockAnalysis.riskLevel} risk). Key events influencing this forecast include ${relevantEvents[0]?.title ?? 'global market conditions'}.`;
+    }
   }
 }

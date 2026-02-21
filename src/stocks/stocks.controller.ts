@@ -8,7 +8,8 @@ import {
 } from '@nestjs/swagger';
 import { StocksService } from './stocks.service.js';
 import { QueryStocksDto } from './dto/query-stocks.dto.js';
-import type { StockAnalysis } from '../common/types/index.js';
+import { PredictTrajectoryDto } from './dto/predict-trajectory.dto.js';
+import type { StockAnalysis, PredictionResult } from '../common/types/index.js';
 
 @ApiTags('Stocks')
 @Controller('stocks')
@@ -23,6 +24,26 @@ export class StocksController {
   })
   findAll(@Query() query: QueryStocksDto) {
     return this.stocksService.findAll(query);
+  }
+
+  @Get(':ticker/predict')
+  @ApiOperation({ summary: 'Get AI-powered price prediction trajectory' })
+  @ApiParam({
+    name: 'ticker',
+    description: 'Stock ticker symbol (e.g. AAPL, TSM, XOM)',
+    example: 'AAPL',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Prediction trajectory with confidence bands, shock factors, and AI narrative',
+  })
+  @ApiResponse({ status: 404, description: 'Stock not found' })
+  predictTrajectory(
+    @Param('ticker') ticker: string,
+    @Query() query: PredictTrajectoryDto,
+  ): Promise<PredictionResult> {
+    return this.stocksService.predictTrajectory(ticker, query.days ?? 30);
   }
 
   @Get(':ticker/analysis')

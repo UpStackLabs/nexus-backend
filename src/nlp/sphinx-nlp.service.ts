@@ -129,6 +129,21 @@ export class SphinxNlpService {
     };
   }
 
+  async generateText(prompt: string): Promise<string> {
+    if (this.openai) {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 200,
+        temperature: 0.7,
+      });
+      return response.choices[0].message.content ?? '';
+    }
+
+    // No OpenAI key — return empty to trigger caller's fallback
+    throw new Error('No LLM provider available');
+  }
+
   /** Predict shock impact using custom model server */
   async predictShock(features: {
     severity: number;

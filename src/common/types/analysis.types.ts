@@ -38,3 +38,29 @@ export interface StockAnalysis {
   shockAnalysis: ShockAnalysisResult;
   analyzedAt: string;
 }
+
+export interface PredictionPoint {
+  date: string;
+  price: number;
+  upper: number;
+  lower: number;
+}
+
+export interface ShockFactor {
+  eventTitle: string;
+  type: string;
+  severity: number;
+  impactScore: number;
+  direction: 'up' | 'down';
+}
+
+export interface PredictionResult {
+  ticker: string;
+  companyName: string;
+  currentPrice: number;
+  trajectory: PredictionPoint[];
+  shockFactors: ShockFactor[];
+  aiSummary: string;
+  confidence: number;
+  generatedAt: string;
+}
