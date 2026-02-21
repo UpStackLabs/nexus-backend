@@ -9,9 +9,13 @@ async function bootstrap() {
   // Global prefix for all REST routes
   app.setGlobalPrefix('api');
 
-  // CORS
+  // CORS — support comma-separated origins or wildcard
+  const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:5173';
+  const origins = corsOrigin.includes(',')
+    ? corsOrigin.split(',').map((o) => o.trim())
+    : corsOrigin;
   app.enableCors({
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: origins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });

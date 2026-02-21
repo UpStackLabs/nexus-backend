@@ -66,6 +66,8 @@ export class ShockglobeStack extends cdk.Stack {
             environment: {
               PORT: '3000',
               NODE_ENV: 'production',
+              CORS_ORIGIN:
+                'https://d1mu38jhorsv0x.cloudfront.net,http://shockglobe-frontend.s3-website-us-east-1.amazonaws.com,http://localhost:5173',
             },
             secrets: {
               OPENAI_API_KEY: ecs.Secret.fromSecretsManager(
