@@ -59,3 +59,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.pdf
 
 package-lock.jsond
+
+# CDK
+infra/node_modules
+infra/cdk.out

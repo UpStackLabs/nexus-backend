@@ -13,11 +13,13 @@ import { VectorDbModule } from './vector-db/vector-db.module.js';
 import { IngestionModule } from './ingestion/ingestion.module.js';
 import { MarketDataModule } from './market-data/market-data.module.js';
 import { ShockEngineModule } from './shock-engine/shock-engine.module.js';
+import { HealthModule } from './health/health.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
+    HealthModule,
     NlpModule,
     VectorDbModule,
     GatewayModule,

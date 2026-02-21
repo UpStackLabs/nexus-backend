@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.env
+.env.*
+infra
+test
+coverage
+.github
+.claude
+*.md
+.dockerignore
+Dockerfile
+.eslintrc*
+.prettierrc*

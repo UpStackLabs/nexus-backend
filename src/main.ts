@@ -48,6 +48,9 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
+  // Graceful shutdown for ECS SIGTERM
+  app.enableShutdownHooks();
+
   console.log(`ShockGlobe API running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/api/docs`);
 }
