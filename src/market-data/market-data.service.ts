@@ -61,30 +61,58 @@ export class MarketDataService {
     const seed = SEED_STOCKS.find((s) => s.ticker === ticker);
     const ohlc = this.ohlcCache.get(ticker);
 
-    // 1. Try Polygon (with circuit breaker)
+    // 1. Try Polygon OHLC cache first (populated by fetchGroupedDaily — free tier)
+    if (ohlc) {
+      const price = ohlc.c; // most recent close
+      const result: LivePrice = {
+        ticker,
+        price,
+        change: seed ? parseFloat((price - seed.price).toFixed(2)) : 0,
+        changePercent: seed
+          ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
+          : 0,
+        source: 'polygon',
+        open: ohlc.o,
+        high: ohlc.h,
+        low: ohlc.l,
+        previousClose: ohlc.pc,
+      };
+      this.setCachedPrice(ticker, result);
+      return result;
+    }
+
+    // 1b. Try Polygon /prev endpoint (free tier — previous day OHLC per ticker)
     if (polygonKey && !this.isPolygonCircuitOpen()) {
       try {
-        const res = await axios.get<{ results: { p: number } }>(
-          `https://api.polygon.io/v2/last/trade/${ticker}`,
+        const res = await axios.get<{
+          results?: { o: number; h: number; l: number; c: number }[];
+        }>(
+          `https://api.polygon.io/v2/aggs/ticker/${ticker}/prev`,
           { params: { apiKey: polygonKey }, timeout: 2000 },
         );
-        const price = res.data?.results?.p;
-        if (price) {
+        const bar = res.data?.results?.[0];
+        if (bar?.c) {
           this.polygonConsecutiveFailures = 0;
+          // Also populate ohlcCache for future lookups
+          this.ohlcCache.set(ticker, {
+            o: bar.o,
+            h: bar.h,
+            l: bar.l,
+            c: bar.c,
+            pc: bar.c,
+          });
           const result: LivePrice = {
             ticker,
-            price,
-            change: seed ? parseFloat((price - seed.price).toFixed(2)) : 0,
+            price: bar.c,
+            change: seed ? parseFloat((bar.c - seed.price).toFixed(2)) : 0,
             changePercent: seed
-              ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
+              ? parseFloat((((bar.c - seed.price) / seed.price) * 100).toFixed(2))
               : 0,
             source: 'polygon',
-            ...(ohlc && {
-              open: ohlc.o,
-              high: ohlc.h,
-              low: ohlc.l,
-              previousClose: ohlc.pc,
-            }),
+            open: bar.o,
+            high: bar.h,
+            low: bar.l,
+            previousClose: bar.c,
           };
           this.setCachedPrice(ticker, result);
           return result;
@@ -97,7 +125,7 @@ export class MarketDataService {
             `Polygon circuit breaker OPEN after ${this.polygonConsecutiveFailures} failures. Skipping for 5min.`,
           );
         }
-        this.logger.warn(`Polygon failed for ${ticker}: ${(err as Error).message}`);
+        this.logger.warn(`Polygon /prev failed for ${ticker}: ${(err as Error).message}`);
       }
     }
 
@@ -124,12 +152,6 @@ export class MarketDataService {
               ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
               : 0,
             source: 'alpaca',
-            ...(ohlc && {
-              open: ohlc.o,
-              high: ohlc.h,
-              low: ohlc.l,
-              previousClose: ohlc.pc,
-            }),
           };
           this.setCachedPrice(ticker, result);
           return result;
@@ -156,12 +178,6 @@ export class MarketDataService {
               ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
               : 0,
             source: 'fmp',
-            ...(ohlc && {
-              open: ohlc.o,
-              high: ohlc.h,
-              low: ohlc.l,
-              previousClose: ohlc.pc,
-            }),
           };
           this.setCachedPrice(ticker, result);
           return result;

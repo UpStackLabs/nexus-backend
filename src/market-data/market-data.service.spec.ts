@@ -110,9 +110,9 @@ describe('MarketDataService', () => {
 
     afterEach(() => jest.clearAllMocks());
 
-    it('should return Polygon price when available', async () => {
+    it('should return Polygon price from /prev endpoint', async () => {
       mockedAxios.get.mockResolvedValue({
-        data: { results: { p: 115.50 } },
+        data: { results: [{ o: 114.00, h: 116.00, l: 113.50, c: 115.50 }] },
       });
 
       const result = await service.getPrice('XOM');
@@ -120,11 +120,14 @@ describe('MarketDataService', () => {
       expect(result.source).toBe('polygon');
       expect(result.price).toBe(115.50);
       expect(result.ticker).toBe('XOM');
+      expect(result.open).toBe(114.00);
+      expect(result.high).toBe(116.00);
+      expect(result.low).toBe(113.50);
     });
 
     it('should compute change vs seed baseline', async () => {
       mockedAxios.get.mockResolvedValue({
-        data: { results: { p: 115.50 } },
+        data: { results: [{ o: 114.00, h: 116.00, l: 113.50, c: 115.50 }] },
       });
 
       const result = await service.getPrice('XOM');
@@ -145,14 +148,32 @@ describe('MarketDataService', () => {
       expect(result.source).toBe('seed');
     });
 
-    it('should fall through when Polygon returns no price', async () => {
+    it('should fall through when Polygon returns no results', async () => {
       mockedAxios.get.mockResolvedValue({
-        data: { results: {} },
+        data: { results: [] },
       });
 
       const result = await service.getPrice('XOM');
 
       expect(result.source).toBe('seed');
+    });
+
+    it('should use ohlcCache on subsequent calls without API hit', async () => {
+      // First call populates ohlcCache via /prev
+      mockedAxios.get.mockResolvedValue({
+        data: { results: [{ o: 114.00, h: 116.00, l: 113.50, c: 115.50 }] },
+      });
+      await service.getPrice('XOM');
+      mockedAxios.get.mockClear();
+
+      // Second call should use ohlcCache, no axios call needed
+      // (price cache has 30s TTL so we need to bypass it)
+      (service as any).priceCache.clear();
+      const result = await service.getPrice('XOM');
+
+      expect(result.source).toBe('polygon');
+      expect(result.price).toBe(115.50);
+      expect(mockedAxios.get).not.toHaveBeenCalled();
     });
   });
 
@@ -271,13 +292,13 @@ describe('MarketDataService', () => {
       const result = await service.getPrice('XOM');
 
       expect(result.source).toBe('seed');
-      // Should have tried Polygon, Alpaca, and FMP (3 calls)
+      // Should have tried Polygon /prev, Alpaca, and FMP (3 calls)
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
     });
 
     it('should stop at Alpaca when Polygon fails but Alpaca succeeds', async () => {
       mockedAxios.get
-        .mockRejectedValueOnce(new Error('Polygon timeout'))
+        .mockRejectedValueOnce(new Error('Polygon /prev timeout'))
         .mockResolvedValueOnce({ data: { trade: { p: 111.00 } } });
 
       const result = await service.getPrice('XOM');
