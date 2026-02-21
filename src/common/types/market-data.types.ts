@@ -4,4 +4,8 @@ export interface LivePrice {
   change: number;
   changePercent: number;
   source: 'polygon' | 'alpaca' | 'fmp' | 'seed';
+  open?: number;
+  high?: number;
+  low?: number;
+  previousClose?: number;
 }

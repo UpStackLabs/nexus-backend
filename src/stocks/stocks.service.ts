@@ -81,13 +81,13 @@ export class StocksService {
     > = {};
 
     for (const lp of prices) {
-      const pc = lp.price - lp.change;
+      const pc = lp.previousClose ?? lp.price - lp.change;
       result[lp.ticker] = {
         c: lp.price,
         pc,
-        o: pc,
-        h: Math.round(lp.price * 1.005 * 100) / 100,
-        l: Math.round(lp.price * 0.995 * 100) / 100,
+        o: lp.open ?? pc,
+        h: lp.high ?? Math.round(lp.price * 1.005 * 100) / 100,
+        l: lp.low ?? Math.round(lp.price * 0.995 * 100) / 100,
         d: lp.change,
         dp: lp.changePercent,
         t: Math.floor(Date.now() / 1000),
