@@ -4,6 +4,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { StocksService } from './stocks.service.js';
 import { QueryStocksDto } from './dto/query-stocks.dto.js';
@@ -76,5 +77,31 @@ export class StocksController {
   })
   getSurpriseAnalysis(@Param('ticker') ticker: string) {
     return this.stocksService.getSurpriseAnalysis(ticker);
+  }
+
+  @Get(':ticker/history')
+  @ApiOperation({ summary: 'Get generated price history for a stock' })
+  @ApiParam({
+    name: 'ticker',
+    description: 'Stock ticker symbol (e.g. AAPL, TSM, XOM)',
+    example: 'AAPL',
+  })
+  @ApiQuery({
+    name: 'timeframe',
+    required: false,
+    description: 'Time window for the history chart',
+    enum: ['1D', '1W', '1M', '3M', '1Y'],
+    example: '1M',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of { date, price, volume } data points',
+  })
+  @ApiResponse({ status: 404, description: 'Stock not found' })
+  getHistory(
+    @Param('ticker') ticker: string,
+    @Query('timeframe') timeframe = '1M',
+  ): { date: string; price: number; volume: number }[] {
+    return this.stocksService.getHistory(ticker, timeframe);
   }
 }
