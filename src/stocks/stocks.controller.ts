@@ -26,6 +26,25 @@ export class StocksController {
     return this.stocksService.findAll(query);
   }
 
+  @Get('quotes')
+  @ApiOperation({ summary: 'Get live quotes for multiple symbols' })
+  @ApiQuery({
+    name: 'symbols',
+    description: 'Comma-separated ticker symbols (e.g. AAPL,MSFT,NVDA)',
+    example: 'AAPL,MSFT,NVDA',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Map of ticker → quote with price, change, high, low, open, previous close',
+  })
+  getQuotes(@Query('symbols') symbols: string) {
+    const tickers = (symbols ?? '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    return this.stocksService.getQuotes(tickers);
+  }
+
   @Get(':ticker/predict')
   @ApiOperation({ summary: 'Get AI-powered price prediction trajectory' })
   @ApiParam({

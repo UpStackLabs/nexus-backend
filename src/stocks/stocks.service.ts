@@ -63,6 +63,40 @@ export class StocksService {
     return { data, total, page, limit, totalPages };
   }
 
+  async getQuotes(
+    tickers: string[],
+  ): Promise<
+    Record<
+      string,
+      { c: number; h: number; l: number; o: number; pc: number; d: number; dp: number; t: number }
+    >
+  > {
+    const prices = await this.marketData.getPrices(
+      tickers.length > 0 ? tickers : SEED_STOCKS.map((s) => s.ticker),
+    );
+
+    const result: Record<
+      string,
+      { c: number; h: number; l: number; o: number; pc: number; d: number; dp: number; t: number }
+    > = {};
+
+    for (const lp of prices) {
+      const pc = lp.price - lp.change;
+      result[lp.ticker] = {
+        c: lp.price,
+        pc,
+        o: pc,
+        h: Math.round(lp.price * 1.005 * 100) / 100,
+        l: Math.round(lp.price * 0.995 * 100) / 100,
+        d: lp.change,
+        dp: lp.changePercent,
+        t: Math.floor(Date.now() / 1000),
+      };
+    }
+
+    return result;
+  }
+
   findOne(ticker: string): StockWithShockHistory {
     const stock = SEED_STOCKS.find(
       (s) => s.ticker.toLowerCase() === ticker.toLowerCase(),
