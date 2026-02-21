@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ShockEngineService } from './shock-engine.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
+import { EventsService } from '../events/events.service.js';
 import { SEED_STOCKS, SEED_EVENTS } from '../common/data/seed-data.js';
 import type { Stock } from '../common/types/index.js';
 
@@ -29,6 +30,7 @@ describe('ShockEngineService', () => {
           ShockEngineService,
           { provide: VectorDbService, useValue: vectorDb },
           { provide: SphinxNlpService, useValue: nlp },
+          { provide: EventsService, useValue: { getAll: () => [...SEED_EVENTS] } },
         ],
       }).compile();
 
@@ -182,6 +184,7 @@ describe('ShockEngineService', () => {
           ShockEngineService,
           { provide: VectorDbService, useValue: vectorDb },
           { provide: SphinxNlpService, useValue: nlp },
+          { provide: EventsService, useValue: { getAll: () => [...SEED_EVENTS] } },
         ],
       }).compile();
 
@@ -263,6 +266,7 @@ describe('ShockEngineService', () => {
           ShockEngineService,
           { provide: VectorDbService, useValue: vectorDb },
           { provide: SphinxNlpService, useValue: nlp },
+          { provide: EventsService, useValue: { getAll: () => [...SEED_EVENTS] } },
         ],
       }).compile();
 

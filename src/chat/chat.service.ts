@@ -5,10 +5,10 @@ import OpenAI from 'openai';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import {
-  SEED_EVENTS,
   SEED_STOCKS,
   SEED_SHOCKS,
 } from '../common/data/seed-data.js';
+import { EventsService } from '../events/events.service.js';
 
 interface ChatContext {
   events: string;
@@ -27,6 +27,7 @@ export class ChatService {
     private readonly config: ConfigService,
     private readonly nlp: SphinxNlpService,
     private readonly vectorDb: VectorDbService,
+    private readonly eventsService: EventsService,
   ) {
     this.ollamaUrl =
       this.config.get<string>('OLLAMA_URL') ?? 'http://localhost:11434';
@@ -157,8 +158,9 @@ export class ChatService {
       this.logger.debug('Vector search failed, using seed data only');
     }
 
-    // Build context from seed data
-    const events = SEED_EVENTS.slice(0, 3)
+    // Build context from current events
+    const currentEvents = this.eventsService.getAll();
+    const events = currentEvents.slice(0, 3)
       .map(
         (e) =>
           `- ${e.title} (${e.type}, severity ${e.severity}/10, ${e.location.region ?? ''}, ${e.location.country})` +
@@ -350,11 +352,16 @@ INSTRUCTIONS:
     }
 
     // Default response
-    const event = SEED_EVENTS[0];
+    const currentEvents = this.eventsService.getAll();
+    const event = currentEvents[0];
+    if (!event) {
+      return `**Nexus Intelligence Briefing**\n\nNo active events are currently being tracked. The platform is awaiting incoming data.\n\n` +
+        `_Nexus AI — Powered by Mistral-7B + Actian VectorAI RAG retrieval_`;
+    }
     return (
       `**Nexus Intelligence Briefing**\n\n` +
       `Current primary event: **${event.title}** (Severity: ${event.severity}/10, Type: ${event.type})\n\n` +
-      `The ShockGlobe platform is tracking ${SEED_EVENTS.length} active events across ${new Set(SEED_EVENTS.flatMap((e) => e.affectedCountries)).size} countries. ` +
+      `The ShockGlobe platform is tracking ${currentEvents.length} active events across ${new Set(currentEvents.flatMap((e) => e.affectedCountries)).size} countries. ` +
       `${SEED_SHOCKS.length} stock-event shock relationships are being monitored in real-time.\n\n` +
       `You can ask me about:\n` +
       `- **Risk exposure**: "Which stocks are most exposed?"\n` +

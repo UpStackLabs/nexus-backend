@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HistoricalService } from './historical.service.js';
+import { EventsService } from '../events/events.service.js';
 import { SEED_EVENTS } from '../common/data/seed-data.js';
 
 describe('HistoricalService', () => {
@@ -7,7 +8,10 @@ describe('HistoricalService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [HistoricalService],
+      providers: [
+        HistoricalService,
+        { provide: EventsService, useValue: { getAll: () => [...SEED_EVENTS] } },
+      ],
     }).compile();
 
     service = module.get<HistoricalService>(HistoricalService);

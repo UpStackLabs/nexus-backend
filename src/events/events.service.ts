@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SEED_EVENTS, SEED_SHOCKS } from '../common/data/seed-data.js';
 import type { ShockEvent, ShockScore } from '../common/types/index.js';
 import { QueryEventsDto } from './dto/query-events.dto.js';
@@ -13,10 +13,30 @@ export interface PaginatedEvents {
 
 @Injectable()
 export class EventsService {
-  private readonly events: ShockEvent[] = SEED_EVENTS;
+  private readonly logger = new Logger(EventsService.name);
+  private readonly events: ShockEvent[] = [...SEED_EVENTS];
   private readonly shocks: ShockScore[] = SEED_SHOCKS;
+  private hasPurgedSeed = false;
+
+  /** Returns the current events list (for use by other services). */
+  getAll(): ShockEvent[] {
+    return this.events;
+  }
 
   addEvent(event: ShockEvent): void {
+    // Once real (non-simulated) data arrives, purge seed events
+    if (!event.isSimulated && !this.hasPurgedSeed) {
+      const seedCount = this.events.filter((e) => e.isSimulated).length;
+      if (seedCount > 0) {
+        // Remove all seed events
+        for (let i = this.events.length - 1; i >= 0; i--) {
+          if (this.events[i].isSimulated) this.events.splice(i, 1);
+        }
+        this.logger.log(`Purged ${seedCount} seed events — real data now available`);
+      }
+      this.hasPurgedSeed = true;
+    }
+
     const titleLower = event.title.toLowerCase().slice(0, 80);
     const duplicate = this.events.some(
       (e) => e.title.toLowerCase().slice(0, 80) === titleLower,

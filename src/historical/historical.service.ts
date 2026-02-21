@@ -1,16 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { SEED_EVENTS } from '../common/data/seed-data.js';
+import { EventsService } from '../events/events.service.js';
 import type { ShockEvent } from '../common/types/index.js';
 import type { SimilarQueryDto } from './dto/similar-query.dto.js';
 
 @Injectable()
 export class HistoricalService {
+  constructor(private readonly eventsService: EventsService) {}
+
   findSimilar(query: SimilarQueryDto): ShockEvent[] {
+    const events = this.eventsService.getAll();
     const limit = query.limit ?? 5;
 
     // If eventId is provided, find events of the same type ranked by severity similarity
     if (query.eventId) {
-      const sourceEvent = SEED_EVENTS.find(
+      const sourceEvent = events.find(
         (e: ShockEvent) => e.id === query.eventId,
       );
 
@@ -18,7 +21,7 @@ export class HistoricalService {
         return [];
       }
 
-      return SEED_EVENTS.filter((e: ShockEvent) => e.id !== sourceEvent.id)
+      return events.filter((e: ShockEvent) => e.id !== sourceEvent.id)
         .filter((e: ShockEvent) => e.type === sourceEvent.type)
         .sort(
           (a: ShockEvent, b: ShockEvent) =>
@@ -39,7 +42,7 @@ export class HistoricalService {
         return [];
       }
 
-      const scored = SEED_EVENTS.map((event: ShockEvent) => {
+      const scored = events.map((event: ShockEvent) => {
         const text =
           `${event.title} ${event.description} ${event.type}`.toLowerCase();
         const matchCount = keywords.filter((kw) => text.includes(kw)).length;
@@ -52,7 +55,7 @@ export class HistoricalService {
     }
 
     // If neither provided, return the most recent events
-    return [...SEED_EVENTS]
+    return [...events]
       .sort(
         (a: ShockEvent, b: ShockEvent) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),

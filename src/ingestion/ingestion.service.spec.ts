@@ -4,6 +4,7 @@ import { NewsIngestionService } from './news-ingestion.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { EventsService } from '../events/events.service.js';
 import type { RawNewsItem } from './news-ingestion.service.js';
 
 describe('IngestionService', () => {
@@ -32,7 +33,7 @@ describe('IngestionService', () => {
 
   beforeEach(async () => {
     newsIngestion = {
-      fetchAll: jest.fn().mockResolvedValue(mockNewsItems),
+      getCachedRaw: jest.fn().mockResolvedValue(mockNewsItems),
     };
 
     nlp = {
@@ -62,6 +63,7 @@ describe('IngestionService', () => {
         { provide: SphinxNlpService, useValue: nlp },
         { provide: VectorDbService, useValue: vectorDb },
         { provide: ShockGlobeGateway, useValue: gateway },
+        { provide: EventsService, useValue: { addEvent: jest.fn() } },
       ],
     }).compile();
 
@@ -171,7 +173,7 @@ describe('IngestionService', () => {
     });
 
     it('should handle empty news feed', async () => {
-      newsIngestion.fetchAll!.mockResolvedValue([]);
+      newsIngestion.getCachedRaw!.mockResolvedValue([]);
 
       const result = await service.runManualIngestion();
 
@@ -180,19 +182,19 @@ describe('IngestionService', () => {
       expect(result.newEvents).toHaveLength(0);
     });
 
-    it('should limit items to 10', async () => {
-      const manyItems = Array.from({ length: 20 }, (_, i) => ({
+    it('should limit items to 30', async () => {
+      const manyItems = Array.from({ length: 50 }, (_, i) => ({
         title: `News ${i}`,
         description: `Desc ${i}`,
         rawText: `News ${i} Desc ${i}`,
         source: 'gdelt',
         publishedAt: new Date().toISOString(),
       }));
-      newsIngestion.fetchAll!.mockResolvedValue(manyItems);
+      newsIngestion.getCachedRaw!.mockResolvedValue(manyItems);
 
       const result = await service.runManualIngestion();
 
-      expect(result.itemsFetched).toBe(10);
+      expect(result.itemsFetched).toBe(30);
     });
 
     it('should set isSimulated to false for real events', async () => {

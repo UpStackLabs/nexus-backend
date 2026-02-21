@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
-import { SEED_EVENTS, SEED_SHOCKS } from '../common/data/seed-data.js';
+import { EventsService } from '../events/events.service.js';
+import { SEED_SHOCKS } from '../common/data/seed-data.js';
 import type {
   StockAnalysis,
   RelevantEvent,
@@ -22,6 +23,7 @@ export class ShockEngineService {
   constructor(
     private readonly vectorDb: VectorDbService,
     private readonly nlp: SphinxNlpService,
+    private readonly eventsService: EventsService,
   ) {}
 
   async computeAnalysis(
@@ -35,8 +37,9 @@ export class ShockEngineService {
       vectorResults = await this.vectorDb.querySimilarEvents(embedding, 10);
     }
 
+    const allEvents = this.eventsService.getAll();
     const relevantEvents: RelevantEvent[] = vectorResults.map((result) => {
-      const seedEvent = SEED_EVENTS.find((e) => e.id === result.eventId);
+      const seedEvent = allEvents.find((e) => e.id === result.eventId);
       const meta = result.metadata as Record<string, unknown>;
       return {
         eventId: result.eventId,
@@ -54,9 +57,9 @@ export class ShockEngineService {
       };
     });
 
-    // Fallback to seed events when vector DB has no results
+    // Fallback to current events when vector DB has no results
     if (relevantEvents.length === 0) {
-      SEED_EVENTS.slice(0, 3).forEach((e) => {
+      allEvents.slice(0, 3).forEach((e) => {
         relevantEvents.push({
           eventId: e.id,
           title: e.title,

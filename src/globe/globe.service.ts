@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  SEED_EVENTS,
   SEED_STOCKS,
   SEED_HEATMAP,
   SEED_ARCS,
@@ -17,10 +16,13 @@ import {
   buildHeatmapFromShocks,
   buildArcsFromShocks,
 } from '../common/utils/shock-calc.js';
+import { EventsService } from '../events/events.service.js';
 
 @Injectable()
 export class GlobeService {
   private readonly logger = new Logger(GlobeService.name);
+
+  constructor(private readonly eventsService: EventsService) {}
 
   /** Cache: eventId → computed heatmap */
   private readonly heatmapCache = new Map<string, HeatmapEntry[]>();
@@ -44,7 +46,7 @@ export class GlobeService {
   }
 
   getEventMarkers(): EventMarker[] {
-    return SEED_EVENTS.map((event: ShockEvent) => ({
+    return this.eventsService.getAll().map((event: ShockEvent) => ({
       id: event.id,
       lat: event.location.lat,
       lng: event.location.lng,
@@ -65,7 +67,7 @@ export class GlobeService {
     const cached = this.heatmapCache.get(eventId);
     if (cached) return cached;
 
-    const event = SEED_EVENTS.find((e: ShockEvent) => e.id === eventId);
+    const event = this.eventsService.getAll().find((e: ShockEvent) => e.id === eventId);
     if (!event) return [];
 
     try {
@@ -85,7 +87,7 @@ export class GlobeService {
     const cached = this.arcsCache.get(eventId);
     if (cached) return cached;
 
-    const event = SEED_EVENTS.find((e: ShockEvent) => e.id === eventId);
+    const event = this.eventsService.getAll().find((e: ShockEvent) => e.id === eventId);
     if (!event) return [];
 
     try {
@@ -102,7 +104,7 @@ export class GlobeService {
   private getMergedHeatmap(): HeatmapEntry[] {
     const byCountry = new Map<string, HeatmapEntry>();
 
-    for (const event of SEED_EVENTS) {
+    for (const event of this.eventsService.getAll()) {
       const heatmap = this.getHeatmapForEvent(event.id);
       for (const entry of heatmap) {
         const existing = byCountry.get(entry.country);
@@ -117,7 +119,7 @@ export class GlobeService {
 
   private getAllArcs(): ConnectionArc[] {
     const allArcs: ConnectionArc[] = [];
-    for (const event of SEED_EVENTS) {
+    for (const event of this.eventsService.getAll()) {
       allArcs.push(...this.getArcsForEvent(event.id));
     }
     return allArcs;
