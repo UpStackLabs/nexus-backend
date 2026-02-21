@@ -21,5 +21,18 @@ services:
       - vectoraidb
     restart: unless-stopped
 
+  model-server:
+    build: ./model-server
+    ports:
+      - "8002:8002"
+    restart: unless-stopped
+    # Mount a named volume so downloaded HuggingFace model weights survive rebuilds
+    volumes:
+      - hf-model-cache:/root/.cache/huggingface
+    environment:
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+      - HF_HOME=/root/.cache/huggingface
+
 volumes:
   vectorai-data:
+  hf-model-cache:
