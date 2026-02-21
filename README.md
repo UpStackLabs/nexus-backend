@@ -1,98 +1,173 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ShockGlobe — Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**Hacklytics 2026 · Finance Track · UpStackLabs**
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+ShockGlobe is the backend for an interactive 3D globe that connects global events (geopolitical crises, military conflicts, economic shocks, policy changes) to their predicted market impacts across countries, sectors, and stocks.
 
-## Description
+Built with **NestJS 11 + TypeScript**. Swagger UI at `/api/docs`.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## Architecture
 
-```bash
-$ npm install
+```
+src/
+  app.module.ts
+  common/types/          Shared TypeScript interfaces
+  common/data/           Seed / mock data
+  events/                GET /api/events
+  stocks/                GET /api/stocks, GET /api/stocks/:ticker/analysis
+  globe/                 GET /api/globe/heatmap, /arcs
+  simulate/              POST /api/simulate
+  sectors/               GET /api/sectors
+  historical/            GET /api/historical/similar
+  nlp/                   OpenAI embedding + event classification
+  vector-db/             Actian VectorAI bridge client
+  ingestion/             GDELT / NewsAPI / ACLED → NLP → VectorDB cron
+  market-data/           Polygon → Alpaca → FMP price polling
+  shock-engine/          S(c,e) composite shock formula
+  gateway/               Socket.io WebSocket gateway
+
+vectorai-bridge/
+  main.py                FastAPI REST wrapper around actiancortex (gRPC)
+  Dockerfile
+  requirements.txt
+
+docker-compose.yml       Actian VectorAI DB + Python bridge
 ```
 
-## Compile and run the project
+---
+
+## Prerequisites
+
+- Node.js 20+
+- Docker + Docker Compose (for Actian VectorAI DB)
+- Python 3.11+ is **not** required locally — Docker handles the bridge
+
+---
+
+## Quick Start
+
+### 1. Install Node dependencies
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+### 2. Configure environment
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cp .env.example .env
 ```
 
-## Deployment
+Open `.env` and fill in any keys you have. The app runs fine without them — it falls back to seed data automatically.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Variable | Purpose | Required for |
+|---|---|---|
+| `OPENAI_API_KEY` | Event classification + embeddings | Real ingestion |
+| `ACTIAN_BRIDGE_URL` | Vector similarity search | Real vector search |
+| `NEWSAPI_KEY` | NewsAPI event feed | Real ingestion |
+| `ACLED_KEY` / `ACLED_EMAIL` | ACLED conflict feed | Real ingestion |
+| `POLYGON_API_KEY` | Live stock prices (primary) | Real market data |
+| `ALPACA_API_KEY` / `ALPACA_API_SECRET` | Live prices (fallback) | Real market data |
+| `FMP_API_KEY` | Live prices (fallback) | Real market data |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 3. Start Actian VectorAI DB + bridge
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker compose up
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+This starts two containers:
 
-## Resources
+- **vectoraidb** — Actian VectorAI DB gRPC server on port `50051`
+- **vectorai-bridge** — Python FastAPI wrapper on port `8001`
 
-Check out a few resources that may come in handy when working with NestJS:
+The bridge auto-creates the `event_vectors` collection (1536-dim, cosine) on startup. Set `ACTIAN_BRIDGE_URL=http://localhost:8001` in `.env`.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+> **macOS Apple Silicon**: Docker pulls a `linux/amd64` image — make sure Rosetta 2 is installed (`softwareupdate --install-rosetta`).
 
-## Support
+### 4. Start the API server
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+npm run start:dev
+```
 
-## Stay in touch
+The server starts on `http://localhost:3000`.
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
-## License
+## Key Endpoints
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/events` | List global events |
+| `GET` | `/api/events/:id/shocks` | Shock scores for an event |
+| `GET` | `/api/stocks` | List stocks (filter by sector/country) |
+| `GET` | `/api/stocks/:ticker/analysis` | Full shock analysis via vector search |
+| `GET` | `/api/stocks/:ticker/surprise` | Surprise factor / anomaly detection |
+| `POST` | `/api/simulate` | What-if simulation for a custom event |
+| `GET` | `/api/globe/heatmap` | Country-level shock heatmap |
+| `GET` | `/api/globe/arcs` | Connection arcs for globe visualisation |
+| `GET` | `/api/sectors` | Sector-level aggregated impacts |
+| `GET` | `/api/historical/similar` | Find historically similar events |
+| `POST` | `/api/ingest` | Manually trigger news ingestion pipeline |
+
+Full interactive docs: **`http://localhost:3000/api/docs`**
+
+---
+
+## WebSocket
+
+Connect with Socket.io to `http://localhost:3000`. Emit subscription events to join rooms:
+
+| Emit | Room | Receives |
+|---|---|---|
+| `subscribe:events` | events | `events:new` — live ingested events |
+| `subscribe:shocks` | shocks | `shocks:update` — shock score updates |
+| `subscribe:prices` | prices | `prices:update` — live price ticks |
+| `subscribe:surprises` | surprises | `surprises:alert` — anomaly alerts |
+
+Price ticks come from `MarketDataService` (real, every 60 s during market hours) or a mock 5-second interval when no `POLYGON_API_KEY` is set.
+
+---
+
+## Shock Formula
+
+```
+S(c,e) = 0.35 · sim  +  0.25 · H  +  0.20 · G  +  0.20 · SC
+```
+
+- **sim** — vector similarity between stock embedding and event embedding (Actian VectorAI)
+- **H** — historical sensitivity of the stock to similar events
+- **G** — geographic proximity (Haversine distance, normalised)
+- **SC** — supply-chain / sector linkage score
+
+---
+
+## Data Pipeline
+
+```
+GDELT / NewsAPI / ACLED
+        ↓  (every 5 min via cron)
+  OpenAI gpt-4o-mini  →  classify event (type, severity, location, tickers)
+  OpenAI text-embedding-3-small  →  1536-dim vector
+        ↓
+  Actian VectorAI DB  (via Python bridge)
+        ↓
+  WebSocket  →  frontend globe
+```
+
+`POST /api/ingest` triggers the pipeline manually.
+
+---
+
+## Available Scripts
+
+```bash
+npm run start:dev    # Dev server with hot-reload
+npm run build        # Production TypeScript build
+npm run start:prod   # Run production build
+npm run test         # Unit tests
+npm run test:e2e     # End-to-end tests
+```

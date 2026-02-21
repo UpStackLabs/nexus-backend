@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  vectoraidb:
+    image: williamimoh/actian-vectorai-db:1.0b
+    platform: linux/amd64
+    ports:
+      - "50051:50051"
+    volumes:
+      - vectorai-data:/data
+    restart: unless-stopped
+
+  vectorai-bridge:
+    build: ./vectorai-bridge
+    ports:
+      - "8001:8001"
+    environment:
+      - VECTORAI_HOST=vectoraidb
+      - VECTORAI_PORT=50051
+    depends_on:
+      - vectoraidb
+    restart: unless-stopped
+
+volumes:
+  vectorai-data:
