@@ -7,5 +7,6 @@ import { EventsModule } from '../events/events.module.js';
   imports: [EventsModule],
   controllers: [GlobeController],
   providers: [GlobeService],
+  exports: [GlobeService],
 })
 export class GlobeModule {}

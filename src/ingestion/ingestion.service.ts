@@ -5,6 +5,9 @@ import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
 import { EventsService } from '../events/events.service.js';
+import { GlobeService } from '../globe/globe.service.js';
+import { COUNTRY_COORDS, EVENT_SECTOR_MAP, calculateStockShock } from '../common/utils/shock-calc.js';
+import { SEED_STOCKS } from '../common/data/seed-data.js';
 import type { ShockEvent } from '../common/types/index.js';
 
 export interface IngestionSummary {
@@ -26,6 +29,7 @@ export class IngestionService implements OnModuleInit {
     private readonly vectorDb: VectorDbService,
     private readonly gateway: ShockGlobeGateway,
     private readonly eventsService: EventsService,
+    private readonly globeService: GlobeService,
   ) {}
 
   onModuleInit() {
@@ -64,6 +68,30 @@ export class IngestionService implements OnModuleInit {
     return this.classifyAndStore(rawItems, start);
   }
 
+  /**
+   * Resolve lat/lng from classified location string and affectedCountries ISO codes.
+   * Tries: affectedCountries ISO codes → location string parts → fallback (0, 0).
+   */
+  private geocode(
+    location: string,
+    affectedCountries: string[],
+  ): { lat: number; lng: number } {
+    // Try ISO codes from affectedCountries first
+    for (const code of affectedCountries) {
+      const coords = COUNTRY_COORDS[code.toUpperCase()];
+      if (coords) return coords;
+    }
+
+    // Try matching parts of the location string (e.g. "Beijing, China")
+    const parts = location.split(/[,;]+/).map((s) => s.trim());
+    for (const part of parts.reverse()) {
+      const coords = COUNTRY_COORDS[part];
+      if (coords) return coords;
+    }
+
+    return { lat: 0, lng: 0 };
+  }
+
   private async classifyAndStore(rawItems: RawNewsItem[], start: number): Promise<IngestionSummary> {
     let itemsProcessed = 0;
     let itemsFailed = 0;
@@ -76,13 +104,14 @@ export class IngestionService implements OnModuleInit {
         const idSnippet = `${Date.now().toString(16).slice(-4)}${Math.random().toString(16).slice(2, 6)}`;
         const eventId = `evt-${idSnippet}`;
 
+        const coords = this.geocode(classified.location, classified.affectedCountries);
         const event: ShockEvent = {
           id: eventId,
           title: item.title,
           description: item.description,
           type: classified.type as ShockEvent['type'],
           severity: Math.min(10, Math.max(1, classified.severity)),
-          location: { lat: 0, lng: 0, country: classified.location },
+          location: { ...coords, country: classified.location },
           timestamp: item.publishedAt,
           affectedCountries: classified.affectedCountries,
           affectedSectors: classified.affectedSectors,
@@ -93,6 +122,16 @@ export class IngestionService implements OnModuleInit {
 
         this.eventsService.addEvent(event);
         this.gateway.emitNewEvent(event);
+
+        // Compute and broadcast shock scores for this event
+        const affectedSectors = EVENT_SECTOR_MAP[event.type] ?? [];
+        const stocks = event.affectedTickers?.length
+          ? SEED_STOCKS.filter((s) => event.affectedTickers.includes(s.ticker))
+          : SEED_STOCKS.slice(0, 10);
+        for (const stock of stocks) {
+          const shock = calculateStockShock(stock, event.location, eventId, affectedSectors, event.severity);
+          this.gateway.emitShockUpdate(shock);
+        }
 
         this.vectorDb.upsertEventVector(eventId, item.rawText, embedding, {
           title: item.title,
@@ -116,6 +155,11 @@ export class IngestionService implements OnModuleInit {
         this.logger.warn(`Failed to process item: ${(result.reason as Error).message}`);
         itemsFailed++;
       }
+    }
+
+    // Invalidate globe caches so new events show on the map
+    if (newEvents.length > 0) {
+      this.globeService.clearCaches();
     }
 
     return {

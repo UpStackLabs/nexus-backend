@@ -29,6 +29,12 @@ export class GlobeService {
   /** Cache: eventId → computed arcs */
   private readonly arcsCache = new Map<string, ConnectionArc[]>();
 
+  /** Clear all cached heatmaps and arcs (call after new events are ingested). */
+  clearCaches(): void {
+    this.heatmapCache.clear();
+    this.arcsCache.clear();
+  }
+
   getHeatmap(eventId?: string): HeatmapEntry[] {
     if (eventId) {
       return this.getHeatmapForEvent(eventId);
