@@ -168,11 +168,19 @@ export class StocksService {
           timeframe as '1D' | '1W' | '1M' | '3M' | '1Y',
         );
         if (candles && candles.length > 0) {
-          return candles.map((c) => ({
-            date: c.date,
-            price: c.close,
-            volume: c.volume,
-          }));
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          return candles.map((c) => {
+            const d = new Date(c.date);
+            let date: string;
+            if (timeframe === '1D') {
+              date = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            } else if (timeframe === '1W') {
+              date = `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            } else {
+              date = `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+            }
+            return { date, price: c.close, volume: c.volume };
+          });
         }
       } catch (err) {
         this.logger.warn(`Historical candles failed for ${ticker}/${timeframe}: ${(err as Error).message}`);
