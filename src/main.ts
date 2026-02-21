@@ -40,6 +40,8 @@ async function bootstrap() {
     .addTag('Simulation', 'What-if event simulation engine')
     .addTag('Sectors', 'Sector-level aggregate shock data')
     .addTag('Historical', 'Historical event matching and similarity search')
+    .addTag('Chat', 'RAG-powered AI financial analyst (Mistral-7B + VectorAI)')
+    .addTag('OSINT', 'Satellite/CCTV image analysis pipeline (YOLOv8 + CLIP)')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

@@ -14,6 +14,9 @@ import { IngestionModule } from './ingestion/ingestion.module.js';
 import { MarketDataModule } from './market-data/market-data.module.js';
 import { ShockEngineModule } from './shock-engine/shock-engine.module.js';
 import { HealthModule } from './health/health.module.js';
+import { ChatModule } from './chat/chat.module.js';
+import { VisionModule } from './vision/vision.module.js';
+import { OsintModule } from './osint/osint.module.js';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { HealthModule } from './health/health.module.js';
     SimulateModule,
     SectorsModule,
     HistoricalModule,
+    ChatModule,
+    VisionModule,
+    OsintModule,
   ],
 })
 export class AppModule {}
