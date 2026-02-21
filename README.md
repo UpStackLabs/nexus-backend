@@ -1,6 +1,6 @@
 # ShockGlobe — Backend API
 
-**Hacklytics 2026 · Finance Track · UpStackLabs**
+**Hacklytics 2026 · Finance Track · Nexus**
 
 ShockGlobe is the backend for an interactive 3D globe that connects global events (geopolitical crises, military conflicts, economic shocks, policy changes) to their predicted market impacts across countries, sectors, and stocks.
 

@@ -1,68 +1,89 @@
-# ShockGlobe — NestJS Backend
+# CLAUDE.md
 
-## Project Overview
-ShockGlobe is the backend API for an interactive 3D globe-based visualization platform
-that connects global events (geopolitical crises, economic shifts, military movements,
-policy changes) to their predicted market impacts across countries, sectors, and stocks.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Built for **Hacklytics 2026** (Finance track) by team **UpStackLabs**.
+## Project
 
-## Tech Stack
-- **Runtime**: Node.js with NestJS 11 + TypeScript
-- **API Docs**: Swagger/OpenAPI at `/api/docs`
-- **WebSockets**: Socket.io via `@nestjs/websockets`
-- **Validation**: class-validator + class-transformer
-- **Config**: @nestjs/config with `.env` files
+ShockGlobe backend — NestJS 11 + TypeScript API for an interactive 3D globe that visualizes how global events propagate as financial market shockwaves. Built for **Hacklytics 2026** (Finance track) by **Nexus**.
+
+The app runs without any API keys — every service falls back to seed data in `common/data/seed-data.ts` automatically.
+
+## Commands
+
+```bash
+npm run start:dev                             # Dev server with hot-reload (port 3000)
+npm run build                                 # TypeScript production build
+npm run start:prod                            # Run compiled dist/main.js
+npm run lint                                  # ESLint with --fix
+npm run format                                # Prettier
+npm run test                                  # Jest unit tests (src/**/*.spec.ts)
+npm run test:watch                            # Jest watch mode
+npm run test:e2e                              # E2E tests (test/jest-e2e.json)
+npm run test -- --testPathPattern=<pattern>   # Run a single test file
+docker compose up                             # Start Actian VectorAI DB + Python bridge
+```
 
 ## Architecture
-```
-src/
-  main.ts                     # Bootstrap, Swagger, CORS
-  app.module.ts               # Root module
-  common/
-    types/                    # Shared TypeScript interfaces
-    dto/                      # Shared DTOs (pagination, etc.)
-    data/                     # Seed/mock data for demo
-  events/                     # GET /api/events, /api/events/:id, /api/events/:id/shocks
-  stocks/                     # GET /api/stocks, /api/stocks/:ticker, /api/stocks/:ticker/surprise
-  globe/                      # GET /api/globe/heatmap, /api/globe/arcs
-  simulate/                   # POST /api/simulate
-  sectors/                    # GET /api/sectors
-  historical/                 # GET /api/historical/similar
-  gateway/                    # WebSocket gateway (events/live, shocks/live, prices/live, surprises/alerts)
-```
 
-## API Prefix
-All REST endpoints are prefixed with `/api`. Swagger UI is at `/api/docs`.
+All REST endpoints use the `/api` prefix. Swagger UI at `/api/docs`.
 
-## Key Domain Concepts
-- **Event**: A global event (geopolitical, economic, military, policy, natural disaster) with location, severity, type
-- **Shock Score**: `S(c,e) = α·sim(ve,vc) + β·H(c,e) + γ·G(c,e) + δ·SC(c,e)` — composite score for a company given an event
-- **Surprise Factor**: `|ΔP_actual - ΔP_predicted| / σ` — how unexpectedly a stock moved
-- **Interlinkedness Score**: Average pairwise correlation of price changes conditioned on an event
+### Module Dependency Graph
+
+**AppModule** imports ConfigModule (global) and ScheduleModule, then all modules below:
+
+**Feature modules** (controller + service + DTOs each):
+- `events/` — Event CRUD + shock scores per event
+- `stocks/` — Stock lookup, ticker analysis, surprise factor (imports `MarketDataModule`, `ShockEngineModule`)
+- `globe/` — Heatmap and arc data for 3D visualization
+- `simulate/` — What-if simulation for hypothetical events
+- `sectors/` — Sector-level aggregated impact
+- `historical/` — Find historically similar events
+- `ingestion/` — News pipeline with cron + manual trigger (imports `NlpModule`, `VectorDbModule`, `GatewayModule`)
+- `health/` — Health check at `/api/health`
+
+**Core service modules** (injected into feature modules):
+- `shock-engine/` — Composite shock formula (imports `VectorDbModule`, `NlpModule`)
+- `nlp/` — OpenAI gpt-4o-mini classification + text-embedding-3-small embeddings
+- `vector-db/` — Client for Actian VectorAI DB via Python FastAPI bridge (port 8001)
+- `market-data/` — Price polling with cascading fallback (imports `GatewayModule`)
+- `gateway/` — Socket.io WebSocket gateway; rooms: `events`, `shocks`, `prices`, `surprises`
+
+### Key Cross-Cutting Patterns
+
+**Seed data fallback** — Every service checks for API keys / external service availability. On failure or missing keys, it returns data from `common/data/seed-data.ts` (SEED_EVENTS, SEED_STOCKS, SEED_SHOCKS, SEED_HEATMAP, SEED_ARCS) with a log warning. This is the core design pattern; preserve it when adding new features.
+
+**Market data cascade** — `MarketDataService.getPrice(ticker)` tries in order: Polygon (2s timeout) → Alpaca (5s) → FMP (5s) → seed price. Returns `LivePrice` with `source` field indicating which succeeded. Polls every 1 minute during market hours (EST 9:30–16:00 weekdays), batching 5 tickers with 200ms delays.
+
+**Ingestion pipeline** — `@Cron('0 */5 * * * *')` or `POST /api/ingest`: NewsIngestionService fetches from GDELT/NewsAPI/ACLED → NLP classifies each article (type, severity, location, tickers) → embeds to 1536-dim vector → upserts to VectorAI DB → broadcasts via gateway WebSocket.
+
+**Shock engine formula** — `S(c,e) = 0.35·sim + 0.25·H + 0.20·G + 0.20·SC` where sim = cosine similarity from vector DB, H = historical sensitivity, G = geographic proximity (inverse haversine), SC = supply-chain linkage via EVENT_SECTOR_MAP. Aggregates top-3 events. Risk levels: low/medium/high/critical.
+
+**WebSocket gateway** — Clients subscribe to rooms via `subscribe:events`, `subscribe:shocks`, `subscribe:prices`, `subscribe:surprises`. Services emit via `emitNewEvent()`, `emitShockUpdate()`, `emitPriceUpdate()`, `emitSurpriseAlert()`. Falls back to mock price ticks (5s interval, ±2% jitter) when no POLYGON_API_KEY.
+
+### Infrastructure
+
+- **Docker**: `Dockerfile` — Node 22-alpine multi-stage build, runs as non-root `node` user
+- **docker-compose.yml**: Actian VectorAI DB (gRPC on 50051) + Python FastAPI bridge (`vectorai-bridge/`, port 8001)
+- **CDK** (`infra/`): `ShockglobeStack` — VPC → ECS Fargate (512 CPU / 1024 MiB) behind ALB, auto-scaling 1–4 tasks at 70% CPU / 80% memory, sticky sessions for Socket.io, secrets from AWS Secrets Manager, circuit breaker enabled
+
+### Shared Types
+
+Type interfaces live in `common/types/` — event, stock, shock, globe, simulation, analysis, market-data. Services return typed data matching these interfaces. Key types: `ShockEvent`, `EventShock`, `ShockScore`, `Stock`, `StockAnalysis`, `HeatmapEntry`, `ConnectionArc`, `LivePrice`, `SimulationRequest/Result`.
 
 ## Conventions
-- Use NestJS module pattern: each feature has its own module, controller, service, and DTOs
-- All DTOs use class-validator decorators for validation
-- All endpoints are documented with @nestjs/swagger decorators
-- Services return typed data matching the interfaces in `common/types/`
-- Currently uses in-memory mock data; designed for easy swap to real DB/APIs later
-- WebSocket gateway uses Socket.io namespaces matching the plan's channels
 
-## Running
-```bash
-npm run start:dev    # Development with hot-reload
-npm run build        # Production build
-npm run start:prod   # Production server
-```
+- Each feature gets its own NestJS module, controller, service, and DTO directory
+- DTOs use `class-validator` decorators; endpoints use `@nestjs/swagger` decorators
+- TypeScript target ES2023, module resolution `nodenext`
+- `noImplicitAny: false` and `no-explicit-any: off` — `any` is allowed
+- Prettier: single quotes, trailing commas
+- NLP service name is `SphinxNlpService` (in `nlp/sphinx-nlp.service.ts`)
 
 ## Environment Variables
-Copy `.env.example` to `.env`:
-- `PORT` — Server port (default: 3000)
-- `CORS_ORIGIN` — Allowed CORS origin (default: http://localhost:5173)
 
-## Frontend Integration
-The frontend (React + Globe.GL + Vite) connects to this backend:
-- REST API: `http://localhost:3000/api/*`
-- WebSocket: `http://localhost:3000` with Socket.io client
-- CORS is configured to allow the frontend origin
+Copy `.env.example` to `.env`. All are optional — the app degrades gracefully:
+- `PORT` (3000), `CORS_ORIGIN` (http://localhost:5173)
+- `OPENAI_API_KEY` — classification + embeddings
+- `ACTIAN_BRIDGE_URL` — vector DB bridge (http://localhost:8001 with docker compose)
+- `NEWSAPI_KEY`, `ACLED_KEY`, `ACLED_EMAIL` — news sources
+- `POLYGON_API_KEY`, `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `FMP_API_KEY` — market data cascade
