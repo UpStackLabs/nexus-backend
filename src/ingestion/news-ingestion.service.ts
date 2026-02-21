@@ -17,6 +17,7 @@ export interface NewsDisplayItem {
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const EMPTY_RETRY_MS = 60 * 1000; // retry after 1 minute when cache is empty
 
 @Injectable()
 export class NewsIngestionService {
@@ -28,11 +29,8 @@ export class NewsIngestionService {
 
   /** Returns cached articles for display, refreshing if stale. */
   async getCachedNews(): Promise<NewsDisplayItem[]> {
-    if (!this.cache || Date.now() - this.cache.fetchedAt > CACHE_TTL_MS) {
-      const items = await this.fetchAll(new Date(0));
-      this.cache = { items, fetchedAt: Date.now() };
-    }
-    return this.cache.items.map((i) => ({
+    const items = await this.getOrRefreshCache();
+    return items.map((i) => ({
       title: i.title,
       source: i.source,
       publishedAt: i.publishedAt,
@@ -41,9 +39,22 @@ export class NewsIngestionService {
 
   /** Returns raw items for ingestion, using the same cache. */
   async getCachedRaw(): Promise<RawNewsItem[]> {
-    if (!this.cache || Date.now() - this.cache.fetchedAt > CACHE_TTL_MS) {
-      const items = await this.fetchAll(new Date(0));
+    return this.getOrRefreshCache();
+  }
+
+  private async getOrRefreshCache(): Promise<RawNewsItem[]> {
+    if (this.cache) {
+      const ttl = this.cache.items.length > 0 ? CACHE_TTL_MS : EMPTY_RETRY_MS;
+      if (Date.now() - this.cache.fetchedAt < ttl) {
+        return this.cache.items;
+      }
+    }
+    const items = await this.fetchAll(new Date(0));
+    // Keep stale cache if new fetch returns empty but we had data before
+    if (items.length > 0 || !this.cache) {
       this.cache = { items, fetchedAt: Date.now() };
+    } else {
+      this.logger.warn('All news sources returned 0 items — serving stale cache');
     }
     return this.cache.items;
   }
@@ -55,13 +66,13 @@ export class NewsIngestionService {
       }>('https://api.gdeltproject.org/api/v2/doc/doc', {
         params: {
           mode: 'artlist',
-          maxrecords: 75,
+          maxrecords: 50,
           format: 'json',
-          query: 'geopolitical economic military sanctions conflict trade war crisis',
-          timespan: '7d',
+          query: '(geopolitical OR military OR sanctions OR "trade war" OR crisis)',
+          timespan: '3d',
           sort: 'DateDesc',
         },
-        timeout: 20000,
+        timeout: 30000,
       });
       const articles = response.data?.articles ?? [];
       return articles.map((a) => ({

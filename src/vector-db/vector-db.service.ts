@@ -57,7 +57,7 @@ export class VectorDbService implements OnModuleInit {
     embedding: number[],
     metadata: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.bridgeUrl) return;
+    if (!this.bridgeUrl || !this.reachable) return;
     try {
       await axios.post(
         `${this.bridgeUrl}/upsert`,
@@ -73,7 +73,7 @@ export class VectorDbService implements OnModuleInit {
     queryEmbedding: number[],
     topK = 10,
   ): Promise<VectorSearchResult[]> {
-    if (!this.bridgeUrl) return [];
+    if (!this.bridgeUrl || !this.reachable) return [];
     try {
       const res = await axios.post<
         { event_id: string; similarity: number; metadata: Record<string, unknown> }[]
