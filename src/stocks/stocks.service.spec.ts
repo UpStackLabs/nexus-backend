@@ -21,6 +21,7 @@ describe('StocksService', () => {
         changePercent: 2.4,
         source: 'seed',
       }),
+      getHistoricalCandles: jest.fn().mockResolvedValue(null),
     };
 
     shockEngine = {
@@ -216,8 +217,8 @@ describe('StocksService', () => {
 
   // ─── getHistory ───────────────────────────────────────────────
   describe('getHistory()', () => {
-    it('should return price history for valid ticker', () => {
-      const result = service.getHistory('XOM', '1M');
+    it('should return price history for valid ticker', async () => {
+      const result = await service.getHistory('XOM', '1M');
 
       expect(result).toHaveLength(30);
       result.forEach((point) => {
@@ -229,41 +230,41 @@ describe('StocksService', () => {
       });
     });
 
-    it('should produce deterministic results for same ticker', () => {
-      const r1 = service.getHistory('XOM', '1M');
-      const r2 = service.getHistory('XOM', '1M');
+    it('should produce deterministic results for same ticker', async () => {
+      const r1 = await service.getHistory('XOM', '1M');
+      const r2 = await service.getHistory('XOM', '1M');
 
       expect(r1).toEqual(r2);
     });
 
-    it('should produce different results for different tickers', () => {
-      const r1 = service.getHistory('XOM', '1M');
-      const r2 = service.getHistory('AAPL', '1M');
+    it('should produce different results for different tickers', async () => {
+      const r1 = await service.getHistory('XOM', '1M');
+      const r2 = await service.getHistory('AAPL', '1M');
 
       expect(r1[0].price).not.toBe(r2[0].price);
     });
 
-    it('should return correct number of points per timeframe', () => {
-      expect(service.getHistory('XOM', '1D')).toHaveLength(13);
-      expect(service.getHistory('XOM', '1W')).toHaveLength(56);
-      expect(service.getHistory('XOM', '1M')).toHaveLength(30);
-      expect(service.getHistory('XOM', '3M')).toHaveLength(90);
-      expect(service.getHistory('XOM', '1Y')).toHaveLength(52);
+    it('should return correct number of points per timeframe', async () => {
+      expect(await service.getHistory('XOM', '1D')).toHaveLength(13);
+      expect(await service.getHistory('XOM', '1W')).toHaveLength(56);
+      expect(await service.getHistory('XOM', '1M')).toHaveLength(30);
+      expect(await service.getHistory('XOM', '3M')).toHaveLength(90);
+      expect(await service.getHistory('XOM', '1Y')).toHaveLength(52);
     });
 
-    it('should default to 1M for unknown timeframe', () => {
-      const result = service.getHistory('XOM', 'INVALID');
+    it('should default to 1M for unknown timeframe', async () => {
+      const result = await service.getHistory('XOM', 'INVALID');
       expect(result).toHaveLength(30);
     });
 
-    it('should throw NotFoundException for unknown ticker', () => {
-      expect(() => service.getHistory('UNKNOWN', '1M')).toThrow(NotFoundException);
+    it('should throw NotFoundException for unknown ticker', async () => {
+      await expect(service.getHistory('UNKNOWN', '1M')).rejects.toThrow(NotFoundException);
     });
 
-    it('should never produce negative prices', () => {
+    it('should never produce negative prices', async () => {
       // Test with all stocks and timeframes
       for (const stock of SEED_STOCKS.slice(0, 5)) {
-        const history = service.getHistory(stock.ticker, '1Y');
+        const history = await service.getHistory(stock.ticker, '1Y');
         history.forEach((point) => {
           expect(point.price).toBeGreaterThan(0);
         });
