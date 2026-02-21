@@ -46,8 +46,8 @@ export class ShockGlobeGateway
 
   onModuleInit(): void {
     // Only run mock ticks when no real market data provider is configured
-    if (this.config.get<string>('POLYGON_API_KEY')) {
-      this.logger.log('POLYGON_API_KEY detected — mock price ticks disabled');
+    if (this.config.get<string>('FINNHUB_API_KEY') || this.config.get<string>('POLYGON_API_KEY')) {
+      this.logger.log('Market data API key detected — mock price ticks disabled');
       return;
     }
     // Emit simulated price updates every 5 seconds

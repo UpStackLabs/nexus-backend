@@ -147,10 +147,10 @@ export class StocksService {
     };
   }
 
-  getHistory(
+  async getHistory(
     ticker: string,
     timeframe: string,
-  ): { date: string; price: number; volume: number }[] {
+  ): Promise<{ date: string; price: number; volume: number }[]> {
     const stock = SEED_STOCKS.find(
       (s) => s.ticker.toLowerCase() === ticker.toLowerCase(),
     );
@@ -159,6 +159,35 @@ export class StocksService {
       throw new NotFoundException(`Stock with ticker "${ticker}" not found`);
     }
 
+    // Try real Polygon candle data first
+    const validTimeframes = ['1D', '1W', '1M', '3M', '1Y'];
+    if (validTimeframes.includes(timeframe)) {
+      try {
+        const candles = await this.marketData.getHistoricalCandles(
+          ticker.toUpperCase(),
+          timeframe as '1D' | '1W' | '1M' | '3M' | '1Y',
+        );
+        if (candles && candles.length > 0) {
+          return candles.map((c) => ({
+            date: c.date,
+            price: c.close,
+            volume: c.volume,
+          }));
+        }
+      } catch (err) {
+        this.logger.warn(`Historical candles failed for ${ticker}/${timeframe}: ${(err as Error).message}`);
+      }
+    }
+
+    // Fall back to PRNG-generated chart
+    return this.generateFakeHistory(stock, ticker, timeframe);
+  }
+
+  private generateFakeHistory(
+    stock: Stock,
+    ticker: string,
+    timeframe: string,
+  ): { date: string; price: number; volume: number }[] {
     // Deterministic seeded PRNG (mulberry32) so the same ticker always
     // returns the same chart regardless of when the request is made.
     const seed = ticker

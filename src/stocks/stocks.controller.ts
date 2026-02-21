@@ -122,7 +122,7 @@ export class StocksController {
   getHistory(
     @Param('ticker') ticker: string,
     @Query('timeframe') timeframe = '1M',
-  ): { date: string; price: number; volume: number }[] {
+  ): Promise<{ date: string; price: number; volume: number }[]> {
     return this.stocksService.getHistory(ticker, timeframe);
   }
 

@@ -4,7 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
 import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
 import { SEED_STOCKS } from '../common/data/seed-data.js';
-import type { LivePrice } from '../common/types/index.js';
+import type { LivePrice, HistoricalCandle } from '../common/types/index.js';
 
 interface CachedPrice {
   data: LivePrice;
@@ -19,6 +19,13 @@ interface OhlcData {
   pc: number;
 }
 
+interface CachedCandles {
+  data: HistoricalCandle[];
+  expiresAt: number;
+}
+
+type HistoricalTimeframe = '1D' | '1W' | '1M' | '3M' | '1Y';
+
 @Injectable()
 export class MarketDataService {
   private readonly logger = new Logger(MarketDataService.name);
@@ -31,15 +38,23 @@ export class MarketDataService {
   private readonly ohlcCache = new Map<string, OhlcData>();
   private ohlcFetchedDate: string | null = null;
 
+  /** Historical candle cache: "ticker:timeframe" → { data, expiresAt } */
+  private readonly candleCache = new Map<string, CachedCandles>();
+
+  /** Circuit breaker: skip Finnhub for 5min after consecutive failures */
+  private finnhubConsecutiveFailures = 0;
+  private finnhubCircuitOpenUntil = 0;
+
   /** Circuit breaker: skip Polygon for 5min after consecutive failures */
   private polygonConsecutiveFailures = 0;
   private polygonCircuitOpenUntil = 0;
+
   private static readonly CIRCUIT_BREAKER_THRESHOLD = 5;
   private static readonly CIRCUIT_BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
 
-  /** Ticker rotation index for pollMarketData — polls 5 per cycle */
+  /** Ticker rotation index for pollMarketData */
   private pollRotationIndex = 0;
-  private static readonly TICKERS_PER_POLL = 5;
+  private static readonly TICKERS_PER_POLL_POLYGON = 5;
 
   constructor(
     private readonly config: ConfigService,
@@ -53,6 +68,7 @@ export class MarketDataService {
       return cached.data;
     }
 
+    const finnhubKey = this.config.get<string>('FINNHUB_API_KEY');
     const polygonKey = this.config.get<string>('POLYGON_API_KEY');
     const alpacaKey = this.config.get<string>('ALPACA_API_KEY');
     const alpacaSecret = this.config.get<string>('ALPACA_API_SECRET');
@@ -61,9 +77,47 @@ export class MarketDataService {
     const seed = SEED_STOCKS.find((s) => s.ticker === ticker);
     const ohlc = this.ohlcCache.get(ticker);
 
-    // 1. Try Polygon OHLC cache first (populated by fetchGroupedDaily — free tier)
+    // 1. Try Finnhub quote (primary — 60 calls/min free tier)
+    if (finnhubKey && !this.isFinnhubCircuitOpen()) {
+      try {
+        const res = await axios.get<{
+          c: number; d: number; dp: number; h: number; l: number; o: number; pc: number; t: number;
+        }>(
+          `https://finnhub.io/api/v1/quote`,
+          { params: { symbol: ticker, token: finnhubKey }, timeout: 2000 },
+        );
+        const q = res.data;
+        if (q && q.c !== 0) {
+          this.finnhubConsecutiveFailures = 0;
+          const result: LivePrice = {
+            ticker,
+            price: q.c,
+            change: q.d,
+            changePercent: q.dp,
+            source: 'finnhub',
+            open: q.o,
+            high: q.h,
+            low: q.l,
+            previousClose: q.pc,
+          };
+          this.setCachedPrice(ticker, result);
+          return result;
+        }
+      } catch (err) {
+        this.finnhubConsecutiveFailures++;
+        if (this.finnhubConsecutiveFailures >= MarketDataService.CIRCUIT_BREAKER_THRESHOLD) {
+          this.finnhubCircuitOpenUntil = Date.now() + MarketDataService.CIRCUIT_BREAKER_COOLDOWN_MS;
+          this.logger.warn(
+            `Finnhub circuit breaker OPEN after ${this.finnhubConsecutiveFailures} failures. Skipping for 5min.`,
+          );
+        }
+        this.logger.warn(`Finnhub /quote failed for ${ticker}: ${(err as Error).message}`);
+      }
+    }
+
+    // 2. Try Polygon OHLC cache first (populated by fetchGroupedDaily — free tier)
     if (ohlc) {
-      const price = ohlc.c; // most recent close
+      const price = ohlc.c;
       const result: LivePrice = {
         ticker,
         price,
@@ -81,7 +135,7 @@ export class MarketDataService {
       return result;
     }
 
-    // 1b. Try Polygon /prev endpoint (free tier — previous day OHLC per ticker)
+    // 2b. Try Polygon /prev endpoint (free tier — previous day OHLC per ticker)
     if (polygonKey && !this.isPolygonCircuitOpen()) {
       try {
         const res = await axios.get<{
@@ -93,7 +147,6 @@ export class MarketDataService {
         const bar = res.data?.results?.[0];
         if (bar?.c) {
           this.polygonConsecutiveFailures = 0;
-          // Also populate ohlcCache for future lookups
           this.ohlcCache.set(ticker, {
             o: bar.o,
             h: bar.h,
@@ -129,7 +182,7 @@ export class MarketDataService {
       }
     }
 
-    // 2. Try Alpaca
+    // 3. Try Alpaca
     if (alpacaKey && alpacaSecret) {
       try {
         const res = await axios.get<{ trade: { p: number } }>(
@@ -161,7 +214,7 @@ export class MarketDataService {
       }
     }
 
-    // 3. Try FMP
+    // 4. Try FMP
     if (fmpKey) {
       try {
         const res = await axios.get<{ price: number }[]>(
@@ -187,7 +240,7 @@ export class MarketDataService {
       }
     }
 
-    // 4. Seed fallback
+    // 5. Seed fallback
     return {
       ticker,
       price: seed?.price ?? 0,
@@ -213,6 +266,79 @@ export class MarketDataService {
       }
     }
     return results;
+  }
+
+  /**
+   * Fetch historical candle data from Polygon `/range` endpoint.
+   * Returns null if no API key or on error (caller should fall back to fake data).
+   */
+  async getHistoricalCandles(
+    ticker: string,
+    timeframe: HistoricalTimeframe,
+  ): Promise<HistoricalCandle[] | null> {
+    const polygonKey = this.config.get<string>('POLYGON_API_KEY');
+    if (!polygonKey) return null;
+
+    // Check candle cache
+    const cacheKey = `${ticker}:${timeframe}`;
+    const cached = this.candleCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+
+    const config: Record<HistoricalTimeframe, {
+      multiplier: number;
+      timespan: string;
+      daysBack: number;
+      cacheTtlMs: number;
+    }> = {
+      '1D': { multiplier: 5,  timespan: 'minute', daysBack: 1,   cacheTtlMs: 5 * 60 * 1000 },
+      '1W': { multiplier: 30, timespan: 'minute', daysBack: 7,   cacheTtlMs: 5 * 60 * 1000 },
+      '1M': { multiplier: 1,  timespan: 'day',    daysBack: 30,  cacheTtlMs: 60 * 60 * 1000 },
+      '3M': { multiplier: 1,  timespan: 'day',    daysBack: 90,  cacheTtlMs: 60 * 60 * 1000 },
+      '1Y': { multiplier: 1,  timespan: 'week',   daysBack: 365, cacheTtlMs: 60 * 60 * 1000 },
+    };
+
+    const cfg = config[timeframe];
+    if (!cfg) return null;
+
+    const to = new Date();
+    const from = new Date(to);
+    from.setDate(from.getDate() - cfg.daysBack);
+
+    const fromStr = from.toISOString().slice(0, 10);
+    const toStr = to.toISOString().slice(0, 10);
+
+    try {
+      const res = await axios.get<{
+        results?: { t: number; o: number; h: number; l: number; c: number; v: number }[];
+      }>(
+        `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/${cfg.multiplier}/${cfg.timespan}/${fromStr}/${toStr}`,
+        { params: { apiKey: polygonKey, sort: 'asc', limit: 5000 }, timeout: 5000 },
+      );
+
+      const bars = res.data?.results;
+      if (!bars || bars.length === 0) return null;
+
+      const candles: HistoricalCandle[] = bars.map((bar) => ({
+        date: new Date(bar.t).toISOString(),
+        open: bar.o,
+        high: bar.h,
+        low: bar.l,
+        close: bar.c,
+        volume: bar.v,
+      }));
+
+      this.candleCache.set(cacheKey, {
+        data: candles,
+        expiresAt: Date.now() + cfg.cacheTtlMs,
+      });
+
+      return candles;
+    } catch (err) {
+      this.logger.warn(`Polygon candles failed for ${ticker}/${timeframe}: ${(err as Error).message}`);
+      return null;
+    }
   }
 
   /**
@@ -280,8 +406,9 @@ export class MarketDataService {
   }
 
   /**
-   * Poll market data every minute. Rotates through tickers — 5 per cycle
-   * to stay within Polygon free tier (5 calls/min).
+   * Poll market data every minute.
+   * With Finnhub key: fetch ALL tickers per cycle (fits in 60/min).
+   * Without: rotates 5 per cycle for Polygon free tier (5 calls/min).
    * Also fetches grouped daily OHLC once per trading day.
    */
   @Cron('0 */1 * * * *')
@@ -292,15 +419,7 @@ export class MarketDataService {
     await this.fetchGroupedDaily();
 
     const allTickers = SEED_STOCKS.map((s) => s.ticker);
-    const batchSize = MarketDataService.TICKERS_PER_POLL;
-
-    // Rotate through tickers
-    const start = this.pollRotationIndex;
-    const tickersToFetch: string[] = [];
-    for (let i = 0; i < batchSize; i++) {
-      tickersToFetch.push(allTickers[(start + i) % allTickers.length]);
-    }
-    this.pollRotationIndex = (start + batchSize) % allTickers.length;
+    const tickersToFetch = this.getRotatedTickers(allTickers);
 
     // Fetch with small delay between each to spread out calls
     for (const ticker of tickersToFetch) {
@@ -317,11 +436,42 @@ export class MarketDataService {
   // Private helpers
   // ──────────────────────────────────────────────────────────────────
 
+  /**
+   * Returns tickers to fetch this poll cycle.
+   * With Finnhub: all tickers (60 calls/min budget).
+   * Without: rotate 5 at a time for Polygon's 5/min limit.
+   */
+  private getRotatedTickers(allTickers: string[]): string[] {
+    const finnhubKey = this.config.get<string>('FINNHUB_API_KEY');
+    if (finnhubKey) {
+      return allTickers;
+    }
+
+    const batchSize = MarketDataService.TICKERS_PER_POLL_POLYGON;
+    const start = this.pollRotationIndex;
+    const tickers: string[] = [];
+    for (let i = 0; i < batchSize; i++) {
+      tickers.push(allTickers[(start + i) % allTickers.length]);
+    }
+    this.pollRotationIndex = (start + batchSize) % allTickers.length;
+    return tickers;
+  }
+
   private setCachedPrice(ticker: string, data: LivePrice): void {
     this.priceCache.set(ticker, {
       data,
       expiresAt: Date.now() + MarketDataService.PRICE_CACHE_TTL_MS,
     });
+  }
+
+  private isFinnhubCircuitOpen(): boolean {
+    if (this.finnhubCircuitOpenUntil === 0) return false;
+    if (Date.now() >= this.finnhubCircuitOpenUntil) {
+      this.finnhubCircuitOpenUntil = 0;
+      this.finnhubConsecutiveFailures = 0;
+      return false;
+    }
+    return true;
   }
 
   private isPolygonCircuitOpen(): boolean {
