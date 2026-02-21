@@ -9,8 +9,8 @@ import type {
   StockAnalysis,
 } from '../common/types/index.js';
 import type { QueryStocksDto } from './dto/query-stocks.dto.js';
-import type { MarketDataService } from '../market-data/market-data.service.js';
-import type { ShockEngineService } from '../shock-engine/shock-engine.service.js';
+import { MarketDataService } from '../market-data/market-data.service.js';
+import { ShockEngineService } from '../shock-engine/shock-engine.service.js';
 
 @Injectable()
 export class StocksService {
