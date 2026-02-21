@@ -22,9 +22,15 @@ export interface VectorSearchResult {
 export class VectorDbService implements OnModuleInit {
   private readonly logger = new Logger(VectorDbService.name);
   private readonly bridgeUrl: string | undefined;
+  private reachable = false;
 
   constructor(private readonly config: ConfigService) {
     this.bridgeUrl = this.config.get<string>('ACTIAN_BRIDGE_URL');
+  }
+
+  /** True only when bridge URL is configured AND responded to /health on startup. */
+  get enabled(): boolean {
+    return this.reachable;
   }
 
   async onModuleInit(): Promise<void> {
@@ -36,6 +42,7 @@ export class VectorDbService implements OnModuleInit {
     }
     try {
       await axios.get(`${this.bridgeUrl}/health`, { timeout: 3000 });
+      this.reachable = true;
       this.logger.log(`Vector DB bridge reachable at ${this.bridgeUrl}`);
     } catch {
       this.logger.warn(

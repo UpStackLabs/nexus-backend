@@ -29,8 +29,11 @@ export class ShockEngineService {
     _currentPrice: number,
   ): Promise<{ relevantEvents: RelevantEvent[]; shockAnalysis: ShockAnalysisResult }> {
     const queryText = `${stock.companyName} ${stock.sector} ${stock.country} stock market impact`;
-    const embedding = await this.nlp.embed(queryText);
-    const vectorResults = await this.vectorDb.querySimilarEvents(embedding, 10);
+    let vectorResults: Awaited<ReturnType<typeof this.vectorDb.querySimilarEvents>> = [];
+    if (this.vectorDb.enabled) {
+      const embedding = await this.nlp.embed(queryText);
+      vectorResults = await this.vectorDb.querySimilarEvents(embedding, 10);
+    }
 
     const relevantEvents: RelevantEvent[] = vectorResults.map((result) => {
       const seedEvent = SEED_EVENTS.find((e) => e.id === result.eventId);

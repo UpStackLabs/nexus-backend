@@ -39,13 +39,13 @@ export class IngestionService {
     const since = this.lastRun;
     this.lastRun = new Date();
 
-    const rawItems = await this.newsIngestion.fetchAll(since);
+    const rawItems = (await this.newsIngestion.fetchAll(since)).slice(0, 10);
     let itemsProcessed = 0;
     let itemsFailed = 0;
     const newEvents: ShockEvent[] = [];
 
-    for (const item of rawItems) {
-      try {
+    const results = await Promise.allSettled(
+      rawItems.map(async (item) => {
         const classified = await this.nlp.classifyEvent(item.rawText);
         const embedding = await this.nlp.embed(item.rawText);
         const idSnippet = `${Date.now().toString(16).slice(-4)}${Math.random().toString(16).slice(2, 6)}`;
@@ -57,11 +57,7 @@ export class IngestionService {
           description: item.description,
           type: classified.type as ShockEvent['type'],
           severity: Math.min(10, Math.max(1, classified.severity)),
-          location: {
-            lat: 0,
-            lng: 0,
-            country: classified.location,
-          },
+          location: { lat: 0, lng: 0, country: classified.location },
           timestamp: item.publishedAt,
           affectedCountries: classified.affectedCountries,
           affectedSectors: classified.affectedSectors,
@@ -79,12 +75,16 @@ export class IngestionService {
         });
 
         this.gateway.emitNewEvent(event);
-        newEvents.push(event);
+        return event;
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        newEvents.push(result.value);
         itemsProcessed++;
-      } catch (err) {
-        this.logger.warn(
-          `Failed to process item "${item.title}": ${(err as Error).message}`,
-        );
+      } else {
+        this.logger.warn(`Failed to process item: ${(result.reason as Error).message}`);
         itemsFailed++;
       }
     }
