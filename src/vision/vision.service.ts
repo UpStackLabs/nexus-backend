@@ -99,35 +99,23 @@ export class VisionService {
   private getMockDetections(): Detection[] {
     return [
       {
-        label: 'military_vehicle',
-        confidence: 0.94,
-        bbox: { x1: 120, y1: 80, x2: 340, y2: 220 },
+        label: 'building',
+        confidence: 0.92,
+        bbox: { x1: 50, y1: 30, x2: 400, y2: 350 },
       },
       {
-        label: 'personnel',
-        confidence: 0.87,
-        bbox: { x1: 380, y1: 150, x2: 440, y2: 290 },
-      },
-      {
-        label: 'infrastructure',
-        confidence: 0.78,
-        bbox: { x1: 50, y1: 10, x2: 600, y2: 60 },
-      },
-      {
-        label: 'supply_convoy',
-        confidence: 0.71,
-        bbox: { x1: 400, y1: 200, x2: 620, y2: 350 },
+        label: 'crowd',
+        confidence: 0.85,
+        bbox: { x1: 100, y1: 200, x2: 500, y2: 450 },
       },
     ];
   }
 
   private getMockClassifications(): SceneClassification[] {
     return [
-      { label: 'military_conflict', score: 0.91 },
-      { label: 'border_region', score: 0.76 },
-      { label: 'tropical_terrain', score: 0.68 },
-      { label: 'military_buildup', score: 0.62 },
-      { label: 'infrastructure_damage', score: 0.45 },
+      { label: 'urban_scene', score: 0.88 },
+      { label: 'protest', score: 0.72 },
+      { label: 'outdoor', score: 0.65 },
     ];
   }
 }
