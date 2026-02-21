@@ -70,4 +70,24 @@ export class GlobeController {
   getEventMarkers(): EventMarker[] {
     return this.globeService.getEventMarkers();
   }
+
+  @Get('vector-proximity')
+  @ApiOperation({
+    summary: 'Vector-DB proximity heatmap for a specific event',
+    description:
+      'Embeds the event text, queries the vector DB for historically similar events, and returns their affected countries as proximity-weighted heatmap entries. Returns [] if the vector DB is unavailable.',
+  })
+  @ApiQuery({
+    name: 'eventId',
+    required: true,
+    type: String,
+    description: 'Event ID to find vector-similar country exposure for',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vector proximity heatmap entries',
+  })
+  getVectorProximity(@Query('eventId') eventId: string): Promise<HeatmapEntry[]> {
+    return this.globeService.getVectorProximity(eventId);
+  }
 }
