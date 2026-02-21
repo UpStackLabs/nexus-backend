@@ -81,25 +81,6 @@ export class StocksController {
     return this.stocksService.getAnalysis(ticker);
   }
 
-  @Get(':ticker')
-  @ApiOperation({ summary: 'Get stock detail with shock history' })
-  @ApiParam({
-    name: 'ticker',
-    description: 'Stock ticker symbol (e.g. AAPL, TSM, XOM)',
-    example: 'AAPL',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Stock detail including full shock history',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Stock not found',
-  })
-  findOne(@Param('ticker') ticker: string) {
-    return this.stocksService.findOne(ticker);
-  }
-
   @Get(':ticker/surprise')
   @ApiOperation({ summary: 'Get surprise factor analysis for a stock' })
   @ApiParam({
@@ -143,5 +124,24 @@ export class StocksController {
     @Query('timeframe') timeframe = '1M',
   ): { date: string; price: number; volume: number }[] {
     return this.stocksService.getHistory(ticker, timeframe);
+  }
+
+  @Get(':ticker')
+  @ApiOperation({ summary: 'Get stock detail with shock history' })
+  @ApiParam({
+    name: 'ticker',
+    description: 'Stock ticker symbol (e.g. AAPL, TSM, XOM)',
+    example: 'AAPL',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Stock detail including full shock history',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Stock not found',
+  })
+  findOne(@Param('ticker') ticker: string) {
+    return this.stocksService.findOne(ticker);
   }
 }
