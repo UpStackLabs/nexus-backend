@@ -3,7 +3,7 @@ export interface LivePrice {
   price: number;
   change: number;
   changePercent: number;
-  source: 'finnhub' | 'polygon' | 'alpaca' | 'fmp' | 'seed';
+  source: 'finnhub' | 'polygon' | 'seed';
   open?: number;
   high?: number;
   low?: number;

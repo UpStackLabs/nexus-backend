@@ -185,7 +185,6 @@ describe('MarketDataService', () => {
       const result = await service.getPrice('XOM');
 
       expect(result.source).toBe('finnhub');
-      // Should only call Finnhub, not Polygon
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
       expect(mockedAxios.get).toHaveBeenCalledWith(
         'https://finnhub.io/api/v1/quote',
@@ -204,6 +203,16 @@ describe('MarketDataService', () => {
 
       expect(result.source).toBe('polygon');
       expect(result.price).toBe(115.50);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('should cascade through all providers to seed', async () => {
+      mockedAxios.get.mockRejectedValue(new Error('All fail'));
+
+      const result = await service.getPrice('XOM');
+
+      expect(result.source).toBe('seed');
+      // Should have tried Finnhub + Polygon /prev (2 calls)
       expect(mockedAxios.get).toHaveBeenCalledTimes(2);
     });
   });
@@ -279,178 +288,18 @@ describe('MarketDataService', () => {
     });
 
     it('should use ohlcCache on subsequent calls without API hit', async () => {
-      // First call populates ohlcCache via /prev
       mockedAxios.get.mockResolvedValue({
         data: { results: [{ o: 114.00, h: 116.00, l: 113.50, c: 115.50 }] },
       });
       await service.getPrice('XOM');
       mockedAxios.get.mockClear();
 
-      // Second call should use ohlcCache, no axios call needed
-      // (price cache has 30s TTL so we need to bypass it)
       (service as any).priceCache.clear();
       const result = await service.getPrice('XOM');
 
       expect(result.source).toBe('polygon');
       expect(result.price).toBe(115.50);
       expect(mockedAxios.get).not.toHaveBeenCalled();
-    });
-  });
-
-  // ─── Alpaca API fallback ──────────────────────────────────────
-  describe('Alpaca API fallback', () => {
-    beforeEach(async () => {
-      configGet = jest.fn((key: string) => {
-        if (key === 'ALPACA_API_KEY') return 'alpaca-key';
-        if (key === 'ALPACA_API_SECRET') return 'alpaca-secret';
-        return undefined;
-      });
-      gateway = { emitPriceUpdate: jest.fn() };
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MarketDataService,
-          { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
-        ],
-      }).compile();
-
-      service = module.get<MarketDataService>(MarketDataService);
-    });
-
-    afterEach(() => jest.clearAllMocks());
-
-    it('should use Alpaca when available', async () => {
-      mockedAxios.get.mockResolvedValue({
-        data: { trade: { p: 110.00 } },
-      });
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('alpaca');
-      expect(result.price).toBe(110.00);
-    });
-
-    it('should fall through to seed when Alpaca fails', async () => {
-      mockedAxios.get.mockRejectedValue(new Error('Unauthorized'));
-
-      const result = await service.getPrice('XOM');
-      expect(result.source).toBe('seed');
-    });
-  });
-
-  // ─── FMP API fallback ─────────────────────────────────────────
-  describe('FMP API fallback', () => {
-    beforeEach(async () => {
-      configGet = jest.fn((key: string) => {
-        if (key === 'FMP_API_KEY') return 'fmp-key';
-        return undefined;
-      });
-      gateway = { emitPriceUpdate: jest.fn() };
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MarketDataService,
-          { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
-        ],
-      }).compile();
-
-      service = module.get<MarketDataService>(MarketDataService);
-    });
-
-    afterEach(() => jest.clearAllMocks());
-
-    it('should use FMP when available', async () => {
-      mockedAxios.get.mockResolvedValue({
-        data: [{ price: 112.00 }],
-      });
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('fmp');
-      expect(result.price).toBe(112.00);
-    });
-
-    it('should fall through to seed when FMP fails', async () => {
-      mockedAxios.get.mockRejectedValue(new Error('Rate limited'));
-
-      const result = await service.getPrice('XOM');
-      expect(result.source).toBe('seed');
-    });
-  });
-
-  // ─── Full cascade ─────────────────────────────────────────────
-  describe('full cascade: Finnhub → Polygon → Alpaca → FMP → seed', () => {
-    beforeEach(async () => {
-      configGet = jest.fn((key: string) => {
-        if (key === 'FINNHUB_API_KEY') return 'finnhub-key';
-        if (key === 'POLYGON_API_KEY') return 'poly-key';
-        if (key === 'ALPACA_API_KEY') return 'alpaca-key';
-        if (key === 'ALPACA_API_SECRET') return 'alpaca-secret';
-        if (key === 'FMP_API_KEY') return 'fmp-key';
-        return undefined;
-      });
-      gateway = { emitPriceUpdate: jest.fn() };
-
-      const module: TestingModule = await Test.createTestingModule({
-        providers: [
-          MarketDataService,
-          { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
-        ],
-      }).compile();
-
-      service = module.get<MarketDataService>(MarketDataService);
-    });
-
-    afterEach(() => jest.clearAllMocks());
-
-    it('should cascade through all providers to seed', async () => {
-      // All providers fail
-      mockedAxios.get.mockRejectedValue(new Error('All fail'));
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('seed');
-      // Should have tried Finnhub + Polygon /prev + Alpaca + FMP (4 calls)
-      expect(mockedAxios.get).toHaveBeenCalledTimes(4);
-    });
-
-    it('should stop at Finnhub when it succeeds', async () => {
-      mockedAxios.get.mockResolvedValue({
-        data: { c: 115.50, d: 2.10, dp: 1.85, h: 116.00, l: 113.50, o: 114.00, pc: 113.40, t: 1700000000 },
-      });
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('finnhub');
-      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
-    });
-
-    it('should stop at Alpaca when Finnhub and Polygon fail but Alpaca succeeds', async () => {
-      mockedAxios.get
-        .mockRejectedValueOnce(new Error('Finnhub fail'))
-        .mockRejectedValueOnce(new Error('Polygon /prev timeout'))
-        .mockResolvedValueOnce({ data: { trade: { p: 111.00 } } });
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('alpaca');
-      expect(result.price).toBe(111.00);
-    });
-
-    it('should stop at FMP when Finnhub, Polygon, and Alpaca fail', async () => {
-      mockedAxios.get
-        .mockRejectedValueOnce(new Error('Finnhub fail'))
-        .mockRejectedValueOnce(new Error('Polygon fail'))
-        .mockRejectedValueOnce(new Error('Alpaca fail'))
-        .mockResolvedValueOnce({ data: [{ price: 113.00 }] });
-
-      const result = await service.getPrice('XOM');
-
-      expect(result.source).toBe('fmp');
-      expect(result.price).toBe(113.00);
     });
   });
 
@@ -523,13 +372,11 @@ describe('MarketDataService', () => {
         },
       });
 
-      // First call hits API
       const result1 = await service.getHistoricalCandles('XOM', '1M');
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
 
       mockedAxios.get.mockClear();
 
-      // Second call should use cache
       const result2 = await service.getHistoricalCandles('XOM', '1M');
       expect(mockedAxios.get).not.toHaveBeenCalled();
       expect(result2).toEqual(result1);
@@ -547,7 +394,6 @@ describe('MarketDataService', () => {
       await service.getHistoricalCandles('XOM', '1M');
       await service.getHistoricalCandles('XOM', '1W');
 
-      // Both should hit the API since different timeframes
       expect(mockedAxios.get).toHaveBeenCalledTimes(2);
     });
   });
@@ -570,12 +416,10 @@ describe('MarketDataService', () => {
     });
 
     it('should emit price updates via gateway during market hours', async () => {
-      // Mock isMarketHours to return true
       jest.spyOn(service as any, 'isMarketHours').mockReturnValue(true);
 
       await service.pollMarketData();
 
-      // Should have emitted for all seed stocks
       expect(gateway.emitPriceUpdate).toHaveBeenCalled();
       expect(gateway.emitPriceUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -625,7 +469,6 @@ describe('MarketDataService', () => {
 
       await service.pollMarketData();
 
-      // Should emit for ALL seed stocks, not just 5
       expect(gateway.emitPriceUpdate).toHaveBeenCalledTimes(SEED_STOCKS.length);
     });
   });

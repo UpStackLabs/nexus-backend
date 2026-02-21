@@ -70,9 +70,6 @@ export class MarketDataService {
 
     const finnhubKey = this.config.get<string>('FINNHUB_API_KEY');
     const polygonKey = this.config.get<string>('POLYGON_API_KEY');
-    const alpacaKey = this.config.get<string>('ALPACA_API_KEY');
-    const alpacaSecret = this.config.get<string>('ALPACA_API_SECRET');
-    const fmpKey = this.config.get<string>('FMP_API_KEY');
 
     const seed = SEED_STOCKS.find((s) => s.ticker === ticker);
     const ohlc = this.ohlcCache.get(ticker);
@@ -182,65 +179,7 @@ export class MarketDataService {
       }
     }
 
-    // 3. Try Alpaca
-    if (alpacaKey && alpacaSecret) {
-      try {
-        const res = await axios.get<{ trade: { p: number } }>(
-          `https://data.alpaca.markets/v2/stocks/${ticker}/trades/latest`,
-          {
-            headers: {
-              'APCA-API-KEY-ID': alpacaKey,
-              'APCA-API-SECRET-KEY': alpacaSecret,
-            },
-            timeout: 5000,
-          },
-        );
-        const price = res.data?.trade?.p;
-        if (price) {
-          const result: LivePrice = {
-            ticker,
-            price,
-            change: seed ? parseFloat((price - seed.price).toFixed(2)) : 0,
-            changePercent: seed
-              ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
-              : 0,
-            source: 'alpaca',
-          };
-          this.setCachedPrice(ticker, result);
-          return result;
-        }
-      } catch (err) {
-        this.logger.warn(`Alpaca failed for ${ticker}: ${(err as Error).message}`);
-      }
-    }
-
-    // 4. Try FMP
-    if (fmpKey) {
-      try {
-        const res = await axios.get<{ price: number }[]>(
-          `https://financialmodelingprep.com/api/v3/quote-short/${ticker}`,
-          { params: { apikey: fmpKey }, timeout: 5000 },
-        );
-        const price = res.data?.[0]?.price;
-        if (price) {
-          const result: LivePrice = {
-            ticker,
-            price,
-            change: seed ? parseFloat((price - seed.price).toFixed(2)) : 0,
-            changePercent: seed
-              ? parseFloat((((price - seed.price) / seed.price) * 100).toFixed(2))
-              : 0,
-            source: 'fmp',
-          };
-          this.setCachedPrice(ticker, result);
-          return result;
-        }
-      } catch (err) {
-        this.logger.warn(`FMP failed for ${ticker}: ${(err as Error).message}`);
-      }
-    }
-
-    // 5. Seed fallback
+    // 3. Seed fallback
     return {
       ticker,
       price: seed?.price ?? 0,
