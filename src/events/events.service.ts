@@ -16,6 +16,14 @@ export class EventsService {
   private readonly events: ShockEvent[] = SEED_EVENTS;
   private readonly shocks: ShockScore[] = SEED_SHOCKS;
 
+  addEvent(event: ShockEvent): void {
+    const titleLower = event.title.toLowerCase().slice(0, 80);
+    const duplicate = this.events.some(
+      (e) => e.title.toLowerCase().slice(0, 80) === titleLower,
+    );
+    if (!duplicate) this.events.unshift(event);
+  }
+
   findAll(query: QueryEventsDto): PaginatedEvents {
     let filtered = [...this.events];
 

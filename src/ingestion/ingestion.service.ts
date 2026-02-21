@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { NewsIngestionService } from './news-ingestion.service.js';
+import { NewsIngestionService, RawNewsItem } from './news-ingestion.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { EventsService } from '../events/events.service.js';
 import type { ShockEvent } from '../common/types/index.js';
 
 export interface IngestionSummary {
@@ -15,7 +16,7 @@ export interface IngestionSummary {
 }
 
 @Injectable()
-export class IngestionService {
+export class IngestionService implements OnModuleInit {
   private readonly logger = new Logger(IngestionService.name);
   private lastRun: Date = new Date(Date.now() - 5 * 60 * 1000);
 
@@ -24,7 +25,14 @@ export class IngestionService {
     private readonly nlp: SphinxNlpService,
     private readonly vectorDb: VectorDbService,
     private readonly gateway: ShockGlobeGateway,
+    private readonly eventsService: EventsService,
   ) {}
+
+  onModuleInit() {
+    this.runManualIngestion().catch((err) =>
+      this.logger.warn(`Initial ingestion failed: ${(err as Error).message}`),
+    );
+  }
 
   @Cron('0 */5 * * * *')
   async runScheduledIngestion(): Promise<void> {
@@ -34,12 +42,29 @@ export class IngestionService {
     );
   }
 
+  /** Called by the frontend with pre-fetched GDELT articles */
+  async processArticles(articles: { title: string; text: string; source: string; publishedAt?: string }[]): Promise<IngestionSummary> {
+    const start = Date.now();
+    const rawItems: RawNewsItem[] = articles.map((a) => ({
+      title: a.title,
+      description: '',
+      rawText: a.text,
+      source: a.source,
+      publishedAt: a.publishedAt ?? new Date().toISOString(),
+    }));
+    return this.classifyAndStore(rawItems, start);
+  }
+
   async runManualIngestion(): Promise<IngestionSummary> {
     const start = Date.now();
     const since = this.lastRun;
     this.lastRun = new Date();
+    const rawItems = (await this.newsIngestion.getCachedRaw()).slice(0, 30);
+    this.logger.log(`[IngestionService] Fetched ${rawItems.length} raw items from news sources`);
+    return this.classifyAndStore(rawItems, start);
+  }
 
-    const rawItems = (await this.newsIngestion.fetchAll(since)).slice(0, 10);
+  private async classifyAndStore(rawItems: RawNewsItem[], start: number): Promise<IngestionSummary> {
     let itemsProcessed = 0;
     let itemsFailed = 0;
     const newEvents: ShockEvent[] = [];
@@ -66,15 +91,19 @@ export class IngestionService {
           isSimulated: false,
         };
 
-        await this.vectorDb.upsertEventVector(eventId, item.rawText, embedding, {
+        this.eventsService.addEvent(event);
+        this.gateway.emitNewEvent(event);
+
+        this.vectorDb.upsertEventVector(eventId, item.rawText, embedding, {
           title: item.title,
           type: event.type,
           severity: event.severity,
           location: event.location,
           timestamp: event.timestamp,
-        });
+        }).catch((err: Error) =>
+          this.logger.warn(`VectorDB upsert skipped for ${eventId}: ${err.message}`),
+        );
 
-        this.gateway.emitNewEvent(event);
         return event;
       }),
     );

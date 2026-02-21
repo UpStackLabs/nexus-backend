@@ -10,35 +10,65 @@ export interface RawNewsItem {
   publishedAt: string;
 }
 
+export interface NewsDisplayItem {
+  title: string;
+  source: string;
+  publishedAt: string;
+}
+
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 @Injectable()
 export class NewsIngestionService {
   private readonly logger = new Logger(NewsIngestionService.name);
 
+  private cache: { items: RawNewsItem[]; fetchedAt: number } | null = null;
+
   constructor(private readonly config: ConfigService) {}
 
-  async fetchGdelt(since: Date): Promise<RawNewsItem[]> {
+  /** Returns cached articles for display, refreshing if stale. */
+  async getCachedNews(): Promise<NewsDisplayItem[]> {
+    if (!this.cache || Date.now() - this.cache.fetchedAt > CACHE_TTL_MS) {
+      const items = await this.fetchAll(new Date(0));
+      this.cache = { items, fetchedAt: Date.now() };
+    }
+    return this.cache.items.map((i) => ({
+      title: i.title,
+      source: i.source,
+      publishedAt: i.publishedAt,
+    }));
+  }
+
+  /** Returns raw items for ingestion, using the same cache. */
+  async getCachedRaw(): Promise<RawNewsItem[]> {
+    if (!this.cache || Date.now() - this.cache.fetchedAt > CACHE_TTL_MS) {
+      const items = await this.fetchAll(new Date(0));
+      this.cache = { items, fetchedAt: Date.now() };
+    }
+    return this.cache.items;
+  }
+
+  async fetchGdelt(_since: Date): Promise<RawNewsItem[]> {
     try {
       const response = await axios.get<{
-        articles?: { url: string; title: string }[];
+        articles?: { url: string; title: string; seendate?: string; domain?: string }[];
       }>('https://api.gdeltproject.org/api/v2/doc/doc', {
         params: {
           mode: 'artlist',
-          maxrecords: 25,
+          maxrecords: 75,
           format: 'json',
-          query: 'geopolitical economic military',
-          startdatetime: since
-            .toISOString()
-            .replace(/[-:]/g, '')
-            .split('.')[0],
+          query: 'geopolitical economic military sanctions conflict trade war crisis',
+          timespan: '7d',
+          sort: 'DateDesc',
         },
-        timeout: 10000,
+        timeout: 20000,
       });
       const articles = response.data?.articles ?? [];
       return articles.map((a) => ({
         title: a.title ?? '',
         description: '',
         rawText: a.title ?? '',
-        source: 'gdelt',
+        source: a.domain ?? 'gdelt',
         publishedAt: new Date().toISOString(),
       }));
     } catch (err) {
@@ -47,9 +77,10 @@ export class NewsIngestionService {
     }
   }
 
-  async fetchNewsApi(since: Date): Promise<RawNewsItem[]> {
+  async fetchNewsApi(_since: Date): Promise<RawNewsItem[]> {
     const apiKey = this.config.get<string>('NEWSAPI_KEY');
     if (!apiKey) return [];
+    const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     try {
       const response = await axios.get<{
         articles?: {
@@ -61,7 +92,7 @@ export class NewsIngestionService {
         headers: { 'X-Api-Key': apiKey },
         params: {
           q: 'geopolitical OR sanctions OR military OR "economic crisis"',
-          from: since.toISOString(),
+          from,
           sortBy: 'publishedAt',
           pageSize: 25,
         },
@@ -80,7 +111,7 @@ export class NewsIngestionService {
     }
   }
 
-  async fetchAcled(since: Date): Promise<RawNewsItem[]> {
+  async fetchAcled(_since: Date): Promise<RawNewsItem[]> {
     const key = this.config.get<string>('ACLED_KEY');
     const email = this.config.get<string>('ACLED_EMAIL');
     if (!key || !email) return [];
@@ -96,7 +127,7 @@ export class NewsIngestionService {
         params: {
           key,
           email,
-          event_date: since.toISOString().split('T')[0],
+          event_date: _since.toISOString().split('T')[0],
           event_date_where: '>',
           limit: 25,
         },
