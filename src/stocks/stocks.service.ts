@@ -6,11 +6,19 @@ import type {
   StockShockEntry,
   SurpriseAnalysis,
   SurpriseEntry,
+  StockAnalysis,
 } from '../common/types/index.js';
 import type { QueryStocksDto } from './dto/query-stocks.dto.js';
+import type { MarketDataService } from '../market-data/market-data.service.js';
+import type { ShockEngineService } from '../shock-engine/shock-engine.service.js';
 
 @Injectable()
 export class StocksService {
+  constructor(
+    private readonly marketData: MarketDataService,
+    private readonly shockEngine: ShockEngineService,
+  ) {}
+
   findAll(query: QueryStocksDto): {
     data: Stock[];
     total: number;
@@ -70,6 +78,32 @@ export class StocksService {
     }));
 
     return { ...stock, shockHistory };
+  }
+
+  async getAnalysis(ticker: string): Promise<StockAnalysis> {
+    const stock = SEED_STOCKS.find(
+      (s) => s.ticker.toLowerCase() === ticker.toLowerCase(),
+    );
+    if (!stock) {
+      throw new NotFoundException(`Stock with ticker "${ticker}" not found`);
+    }
+    const livePrice = await this.marketData.getPrice(ticker.toUpperCase());
+    const { relevantEvents, shockAnalysis } = await this.shockEngine.computeAnalysis(
+      stock,
+      livePrice.price,
+    );
+    return {
+      ticker: stock.ticker,
+      companyName: stock.companyName,
+      sector: stock.sector,
+      country: stock.country,
+      currentPrice: livePrice.price,
+      priceChange24h: livePrice.change,
+      priceChangePercent24h: livePrice.changePercent,
+      relevantEvents,
+      shockAnalysis,
+      analyzedAt: new Date().toISOString(),
+    };
   }
 
   getSurpriseAnalysis(ticker: string): SurpriseAnalysis {

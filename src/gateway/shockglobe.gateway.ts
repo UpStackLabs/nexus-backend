@@ -8,6 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SEED_STOCKS } from '../common/data/seed-data.js';
 import type { Stock } from '../common/types/index.js';
 
@@ -29,6 +30,8 @@ export class ShockGlobeGateway
   private readonly logger = new Logger(ShockGlobeGateway.name);
   private mockInterval: ReturnType<typeof setInterval> | null = null;
 
+  constructor(private readonly config: ConfigService) {}
+
   afterInit(): void {
     this.logger.log('ShockGlobe WebSocket Gateway initialized');
   }
@@ -42,6 +45,11 @@ export class ShockGlobeGateway
   }
 
   onModuleInit(): void {
+    // Only run mock ticks when no real market data provider is configured
+    if (this.config.get<string>('POLYGON_API_KEY')) {
+      this.logger.log('POLYGON_API_KEY detected — mock price ticks disabled');
+      return;
+    }
     // Emit simulated price updates every 5 seconds
     this.mockInterval = setInterval(() => {
       if (!this.server) return;

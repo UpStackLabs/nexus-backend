@@ -7,6 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { StocksService } from './stocks.service.js';
 import { QueryStocksDto } from './dto/query-stocks.dto.js';
+import type { StockAnalysis } from '../common/types/index.js';
 
 @ApiTags('Stocks')
 @Controller('stocks')
@@ -21,6 +22,22 @@ export class StocksController {
   })
   findAll(@Query() query: QueryStocksDto) {
     return this.stocksService.findAll(query);
+  }
+
+  @Get(':ticker/analysis')
+  @ApiOperation({ summary: 'Get full shock analysis for a stock' })
+  @ApiParam({
+    name: 'ticker',
+    description: 'Stock ticker symbol (e.g. AAPL, TSM, XOM)',
+    example: 'XOM',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Full shock analysis including relevant events and composite score',
+  })
+  @ApiResponse({ status: 404, description: 'Stock not found' })
+  getAnalysis(@Param('ticker') ticker: string): Promise<StockAnalysis> {
+    return this.stocksService.getAnalysis(ticker);
   }
 
   @Get(':ticker')
