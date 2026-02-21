@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import OpenAI from 'openai';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
 import {
@@ -20,6 +21,7 @@ interface ChatContext {
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
   private readonly ollamaUrl: string;
+  private readonly openai: OpenAI | null;
 
   constructor(
     private readonly config: ConfigService,
@@ -28,22 +30,30 @@ export class ChatService {
   ) {
     this.ollamaUrl =
       this.config.get<string>('OLLAMA_URL') ?? 'http://localhost:11434';
+    const apiKey = this.config.get<string>('OPENAI_API_KEY');
+    this.openai = apiKey ? new OpenAI({ apiKey, timeout: 30_000 }) : null;
   }
 
   async chat(
     message: string,
     history: { role: 'user' | 'assistant'; content: string }[] = [],
   ): Promise<string> {
-    // 1. Build context from RAG retrieval + seed data
     const context = await this.buildContext(message);
 
-    // 2. Try Ollama (Mistral-7B) first, fallback to intelligent mock response
+    // Cascade: Ollama → OpenAI → hardcoded fallback
     try {
       return await this.queryOllama(message, history, context);
     } catch {
-      this.logger.warn('Ollama unavailable — using intelligent fallback');
-      return this.generateFallbackResponse(message, context);
+      this.logger.warn('Ollama unavailable — trying OpenAI');
     }
+
+    try {
+      return await this.queryOpenAI(message, history, context);
+    } catch {
+      this.logger.warn('OpenAI unavailable — using intelligent fallback');
+    }
+
+    return this.generateFallbackResponse(message, context);
   }
 
   async *chatStream(
@@ -52,16 +62,79 @@ export class ChatService {
   ): AsyncGenerator<string> {
     const context = await this.buildContext(message);
 
+    // Try Ollama streaming first
     try {
       yield* this.streamOllama(message, history, context);
+      return;
     } catch {
-      this.logger.warn('Ollama unavailable — streaming fallback response');
-      const fallback = this.generateFallbackResponse(message, context);
-      // Stream the fallback word by word
-      const words = fallback.split(' ');
-      for (const word of words) {
-        yield word + ' ';
-      }
+      this.logger.warn('Ollama unavailable — trying OpenAI stream');
+    }
+
+    // Try OpenAI streaming
+    try {
+      yield* this.streamOpenAI(message, history, context);
+      return;
+    } catch {
+      this.logger.warn('OpenAI unavailable — streaming fallback');
+    }
+
+    // Fallback: stream word by word
+    const fallback = this.generateFallbackResponse(message, context);
+    const words = fallback.split(' ');
+    for (const word of words) {
+      yield word + ' ';
+    }
+  }
+
+  private async queryOpenAI(
+    message: string,
+    history: { role: 'user' | 'assistant'; content: string }[],
+    context: ChatContext,
+  ): Promise<string> {
+    if (!this.openai) throw new Error('No OpenAI API key configured');
+
+    const systemPrompt = this.buildSystemPrompt(context);
+    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      { role: 'user', content: message },
+    ];
+
+    const response = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 512,
+      temperature: 0.7,
+    });
+
+    return response.choices[0].message.content ?? 'No response generated.';
+  }
+
+  private async *streamOpenAI(
+    message: string,
+    history: { role: 'user' | 'assistant'; content: string }[],
+    context: ChatContext,
+  ): AsyncGenerator<string> {
+    if (!this.openai) throw new Error('No OpenAI API key configured');
+
+    const systemPrompt = this.buildSystemPrompt(context);
+    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...history.map((h) => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      { role: 'user', content: message },
+    ];
+
+    const stream = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 512,
+      temperature: 0.7,
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) yield content;
     }
   }
 
