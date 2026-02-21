@@ -18,7 +18,7 @@ export class SphinxNlpService {
 
   constructor(private readonly config: ConfigService) {
     const apiKey = this.config.get<string>('OPENAI_API_KEY');
-    this.openai = apiKey ? new OpenAI({ apiKey }) : null;
+    this.openai = apiKey ? new OpenAI({ apiKey, timeout: 15_000 }) : null;
     if (!this.openai) {
       this.logger.warn('OPENAI_API_KEY not set — NLP will return stub values');
     }

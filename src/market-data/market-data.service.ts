@@ -26,7 +26,7 @@ export class MarketDataService {
       try {
         const res = await axios.get<{ results: { p: number } }>(
           `https://api.polygon.io/v2/last/trade/${ticker}`,
-          { params: { apiKey: polygonKey }, timeout: 5000 },
+          { params: { apiKey: polygonKey }, timeout: 2000 },
         );
         const price = res.data?.results?.p;
         if (price) {
