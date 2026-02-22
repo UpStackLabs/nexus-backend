@@ -3,7 +3,7 @@ Nexus Model Server
 ==================
 FastAPI wrapper around pre-trained HuggingFace models.
 Serves NLP classification, text embeddings, shock prediction,
-and vision inference for the ShockGlobe NestJS backend.
+LSTM stock price prediction, and vision inference for the Nexus NestJS backend.
 
 Endpoints
 ---------
@@ -11,6 +11,7 @@ GET  /health              - Liveness + loaded model list
 POST /classify            - Zero-shot event classification (BART-MNLI / keyword fallback)
 POST /embed               - Sentence embedding via all-MiniLM-L6-v2 (384-dim)
 POST /predict-shock       - Rule-based shock magnitude prediction
+POST /predict-price       - LSTM 30-day stock price prediction with confidence bands
 POST /vision/detect       - Object detection (realistic mock — avoids ultralytics dep)
 POST /vision/classify     - Scene classification (realistic mock)
 """
@@ -28,12 +29,24 @@ from contextlib import asynccontextmanager
 from functools import partial
 from typing import Any
 
+import json as json_module
+from pathlib import Path
+
+import joblib
 import numpy as np
 import requests
+import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from pydantic import BaseModel
+
+from features import (
+    FEATURE_COLUMNS,
+    HORIZON,
+    LOOKBACK,
+    compute_features,
+)
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -360,6 +373,40 @@ async def lifespan(app: FastAPI):
         )
         _models["zsc"] = None
 
+    # --- LSTM price prediction models ---
+    logger.info("Loading LSTM price prediction models ...")
+    models_dir = Path(__file__).parent / "models"
+    lstm_models: dict[str, dict[str, Any]] = {}
+    if models_dir.exists():
+        for ticker_dir in sorted(models_dir.iterdir()):
+            if not ticker_dir.is_dir():
+                continue
+            model_path = ticker_dir / "model.keras"
+            scaler_path = ticker_dir / "scaler.pkl"
+            meta_path = ticker_dir / "metadata.json"
+            if model_path.exists() and scaler_path.exists():
+                try:
+                    import tensorflow as tf
+                    model = tf.keras.models.load_model(model_path)
+                    scaler = joblib.load(scaler_path)
+                    meta = {}
+                    if meta_path.exists():
+                        with open(meta_path) as f:
+                            meta = json_module.load(f)
+                    ticker = ticker_dir.name.upper()
+                    lstm_models[ticker] = {
+                        "model": model,
+                        "scaler": scaler,
+                        "metadata": meta,
+                    }
+                    logger.info(f"  Loaded LSTM model for {ticker}")
+                except Exception as exc:
+                    logger.warning(f"  Failed to load LSTM for {ticker_dir.name}: {exc}")
+    _models["lstm"] = lstm_models
+    if lstm_models:
+        _loaded_model_names.append(f"LSTM price prediction ({len(lstm_models)} tickers)")
+    logger.info(f"LSTM models loaded: {list(lstm_models.keys()) or 'none'}")
+
     logger.info(
         f"Model server ready. Loaded models: {_loaded_model_names or ['none (keyword/rule fallback)']}"
     )
@@ -439,6 +486,24 @@ class PredictShockResponse(BaseModel):
     confidence: float
     risk_level: str
     components: dict[str, float]
+
+
+class PredictPriceRequest(BaseModel):
+    ticker: str
+
+
+class PredictPricePoint(BaseModel):
+    day: int
+    price: float
+    upper: float
+    lower: float
+
+
+class PredictPriceResponse(BaseModel):
+    ticker: str
+    predictions: list[PredictPricePoint]
+    confidence: float
+    inference_time_ms: float
 
 
 class VisionUrlRequest(BaseModel):
@@ -677,11 +742,14 @@ def _predict_shock_rule(
 @app.get("/health")
 async def health() -> dict:
     """Liveness check and model inventory."""
+    lstm_dict = _models.get("lstm", {})
     return {
         "status": "ok",
         "models": _loaded_model_names,
         "zsc_available": _models.get("zsc") is not None,
         "embed_available": _models.get("embed") is not None,
+        "lstm_available": len(lstm_dict) > 0,
+        "lstm_tickers": sorted(lstm_dict.keys()) if lstm_dict else [],
         "uptime_note": "Vision endpoints return realistic mock data (no YOLO/CLIP loaded).",
     }
 
@@ -813,6 +881,119 @@ async def predict_shock(req: PredictShockRequest) -> PredictShockResponse:
             "sector_relevance": f.sector_relevance,
             "geographic_proximity": f.geographic_proximity,
         },
+    )
+
+
+@app.post("/predict-price", response_model=PredictPriceResponse)
+async def predict_price(req: PredictPriceRequest) -> PredictPriceResponse:
+    """
+    LSTM-based 30-day stock price prediction with Monte Carlo Dropout
+    confidence bands.
+
+    1. Fetch last 60 trading days from yfinance
+    2. Apply same feature engineering as training
+    3. Normalize with saved per-ticker scaler
+    4. Run 50 MC Dropout forward passes (model(x, training=True))
+    5. Compute mean + 95% CI (mean +/- 1.96*std)
+    6. Inverse-transform back to price space
+    """
+    import pandas as pd
+    import tensorflow as tf
+
+    t0 = time.perf_counter()
+    ticker = req.ticker.strip().upper()
+
+    lstm_dict = _models.get("lstm", {})
+    if ticker not in lstm_dict:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No LSTM model loaded for {ticker}. Available: {sorted(lstm_dict.keys())}",
+        )
+
+    model_info = lstm_dict[ticker]
+    model = model_info["model"]
+    scaler = model_info["scaler"]
+
+    # 1. Fetch recent data (need LOOKBACK + buffer for feature NaNs)
+    fetch_days = LOOKBACK + 60  # extra for rolling windows to settle
+    try:
+        df = yf.download(ticker, period=f"{fetch_days + 30}d", interval="1d", progress=False)
+        if df is None or df.empty:
+            raise ValueError("Empty dataframe")
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch market data for {ticker}: {exc}",
+        )
+
+    # 2. Feature engineering
+    features_df = compute_features(df)
+    features_df = features_df.dropna()
+
+    if len(features_df) < LOOKBACK:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Insufficient data after feature engineering: {len(features_df)} rows (need {LOOKBACK})",
+        )
+
+    # 3. Normalize with saved scaler
+    recent = features_df[FEATURE_COLUMNS].tail(LOOKBACK).values
+    scaled = scaler.transform(recent)
+    input_seq = np.expand_dims(scaled, axis=0)  # (1, LOOKBACK, n_features)
+
+    # 4. Monte Carlo Dropout: 50 forward passes with training=True
+    n_passes = 50
+    predictions = []
+    for _ in range(n_passes):
+        pred = await _run_in_thread(
+            lambda: model(input_seq, training=True).numpy()[0]
+        )
+        predictions.append(pred)
+
+    predictions = np.array(predictions)  # (n_passes, HORIZON)
+    mean_pred = predictions.mean(axis=0)
+    std_pred = predictions.std(axis=0)
+
+    # 5. Inverse-transform: predictions are in scaled close-price space (column 0)
+    #    We need to reverse the MinMaxScaler for the close column only
+    n_features = scaler.n_features_in_
+    dummy = np.zeros((HORIZON, n_features))
+
+    # Mean
+    dummy[:, 0] = mean_pred
+    inv_mean = scaler.inverse_transform(dummy)[:, 0]
+
+    # Upper (mean + 1.96*std)
+    dummy[:, 0] = mean_pred + 1.96 * std_pred
+    inv_upper = scaler.inverse_transform(dummy)[:, 0]
+
+    # Lower (mean - 1.96*std)
+    dummy[:, 0] = np.maximum(mean_pred - 1.96 * std_pred, 0)
+    inv_lower = scaler.inverse_transform(dummy)[:, 0]
+
+    # 6. Build response
+    result_points = []
+    for i in range(HORIZON):
+        result_points.append(PredictPricePoint(
+            day=i + 1,
+            price=round(float(inv_mean[i]), 2),
+            upper=round(float(inv_upper[i]), 2),
+            lower=round(float(max(inv_lower[i], 0.01)), 2),
+        ))
+
+    # Confidence: inverse of mean relative uncertainty
+    mean_uncertainty = float(np.mean(std_pred / (np.abs(mean_pred) + 1e-8)))
+    confidence = round(max(0.3, min(0.95, 1.0 - mean_uncertainty)), 3)
+
+    elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+
+    return PredictPriceResponse(
+        ticker=ticker,
+        predictions=result_points,
+        confidence=confidence,
+        inference_time_ms=elapsed_ms,
     )
 
 

@@ -27,8 +27,10 @@ services:
       - "8002:8002"
     restart: unless-stopped
     # Mount a named volume so downloaded HuggingFace model weights survive rebuilds
+    # Mount local models directory for trained LSTM models
     volumes:
       - hf-model-cache:/root/.cache/huggingface
+      - ./model-server/models:/app/models
     environment:
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
       - HF_HOME=/root/.cache/huggingface

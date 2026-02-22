@@ -334,7 +334,7 @@ export class StocksService {
     const livePrice = await this.marketData.getPrice(ticker.toUpperCase());
     const currentPrice = livePrice.price;
 
-    // 2. Compute shock analysis
+    // 2. Compute shock analysis (needed for shockFactors + narrative regardless of source)
     const { relevantEvents, shockAnalysis } =
       await this.shockEngine.computeAnalysis(stock, currentPrice);
 
@@ -347,8 +347,79 @@ export class StocksService {
       direction: shockAnalysis.direction,
     }));
 
-    // 4. Generate 30-day forward trajectory
-    //    Shock-adjusted drift with exponential decay + stochastic volatility
+    // 4. Try LSTM model first, fall back to GBM
+    let trajectory: PredictionPoint[];
+    let confidence: number;
+    let source: 'lstm' | 'gbm';
+
+    const lstmResult = await this.nlp.predictPrice(ticker.toUpperCase());
+
+    if (lstmResult) {
+      // LSTM succeeded — map predictions to PredictionPoint[] with dates
+      const now = new Date();
+      trajectory = lstmResult.predictions.slice(0, days).map((p) => {
+        const date = new Date(now);
+        date.setDate(date.getDate() + p.day);
+        return {
+          date: date.toISOString().slice(0, 10),
+          price: p.price,
+          upper: p.upper,
+          lower: p.lower,
+        };
+      });
+      confidence = lstmResult.confidence;
+      source = 'lstm';
+    } else {
+      // Fallback to GBM
+      const gbmResult = this.predictTrajectoryGBM(
+        stock,
+        currentPrice,
+        days,
+        shockAnalysis,
+        ticker,
+      );
+      trajectory = gbmResult.trajectory;
+      confidence = gbmResult.confidence;
+      source = 'gbm';
+    }
+
+    this.logger.log(
+      `Prediction for ${ticker}: source=${source}, days=${trajectory.length}, confidence=${confidence}`,
+    );
+
+    // 5. Generate AI narrative
+    const aiSummary = await this.generatePredictionNarrative(
+      stock,
+      currentPrice,
+      trajectory,
+      shockAnalysis,
+      relevantEvents,
+    );
+
+    return {
+      ticker: stock.ticker,
+      companyName: stock.companyName,
+      currentPrice,
+      trajectory,
+      shockFactors,
+      aiSummary,
+      confidence,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  private predictTrajectoryGBM(
+    stock: Stock,
+    currentPrice: number,
+    days: number,
+    shockAnalysis: {
+      compositeShockScore: number;
+      predictedPriceChange: number;
+      confidence: number;
+      direction: 'up' | 'down';
+    },
+    ticker: string,
+  ): { trajectory: PredictionPoint[]; confidence: number } {
     const { compositeShockScore, predictedPriceChange, confidence, direction } = shockAnalysis;
     const dailyDrift = (predictedPriceChange / 100) / days;
     const dailyVol = Math.max(
@@ -399,25 +470,7 @@ export class StocksService {
       });
     }
 
-    // 5. Generate AI narrative
-    const aiSummary = await this.generatePredictionNarrative(
-      stock,
-      currentPrice,
-      trajectory,
-      shockAnalysis,
-      relevantEvents,
-    );
-
-    return {
-      ticker: stock.ticker,
-      companyName: stock.companyName,
-      currentPrice,
-      trajectory,
-      shockFactors,
-      aiSummary,
-      confidence: shockAnalysis.confidence,
-      generatedAt: new Date().toISOString(),
-    };
+    return { trajectory, confidence };
   }
 
   private async generatePredictionNarrative(
