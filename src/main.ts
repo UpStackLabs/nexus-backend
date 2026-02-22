@@ -31,9 +31,9 @@ async function bootstrap() {
 
   // Swagger / OpenAPI documentation
   const config = new DocumentBuilder()
-    .setTitle('ShockGlobe API')
+    .setTitle('Nexus API')
     .setDescription(
-      'Backend API for ShockGlobe — Global Event-Driven Market Shock Visualizer. ' +
+      'Backend API for Nexus — Global Event-Driven Market Shock Visualizer. ' +
         'Connects global events (geopolitical crises, economic shifts, military movements, ' +
         'policy changes) to predicted market impacts across countries, sectors, and stocks.',
     )
@@ -57,7 +57,7 @@ async function bootstrap() {
   // Graceful shutdown for ECS SIGTERM
   app.enableShutdownHooks();
 
-  console.log(`ShockGlobe API running on http://localhost:${port}`);
+  console.log(`Nexus API running on http://localhost:${port}`);
   console.log(`Swagger docs at http://localhost:${port}/api/docs`);
 }
 bootstrap();

@@ -259,7 +259,7 @@ export class ChatService {
   }
 
   private buildSystemPrompt(context: ChatContext): string {
-    return `You are Nexus AI, an elite financial intelligence analyst embedded in the ShockGlobe platform. You have access to real-time OSINT data, market analytics, and geopolitical risk assessments.
+    return `You are Nexus AI, an elite financial intelligence analyst embedded in the Nexus platform. You have access to real-time OSINT data, market analytics, and geopolitical risk assessments.
 
 ACTIVE EVENTS:
 ${context.events}
@@ -310,7 +310,7 @@ INSTRUCTIONS:
           .join('\n') +
         `\n\n**Key Sectors at Risk:** Energy, Defense, and Agriculture show the highest aggregate exposure. ` +
         `Geographic proximity to the epicenter and supply-chain dependencies are the primary transmission channels.\n\n` +
-        `_Analysis powered by Nexus AI — ShockGlobe Intelligence Platform_`
+        `_Analysis powered by Nexus AI — Intelligence Platform_`
       );
     }
 
@@ -327,7 +327,7 @@ INSTRUCTIONS:
         `3. **2014 Crimea Annexation** — Geopolitical risk repricing, emerging market currency sell-off, sanctions cascade effects\n\n` +
         `In each historical analog, energy stocks experienced 15-25% moves within the first 72 hours, ` +
         `followed by a normalization period of 2-4 weeks. Defense contractors showed sustained 10-15% gains over 30 days.\n\n` +
-        `_Analysis powered by Nexus AI — ShockGlobe Intelligence Platform_`
+        `_Analysis powered by Nexus AI — Intelligence Platform_`
       );
     }
 
@@ -347,7 +347,7 @@ INSTRUCTIONS:
         `| Tech | 0.35 | Down ↓ | AAPL, MSFT, TSM |\n\n` +
         `Energy and Defense sectors show the highest sensitivity to the current geopolitical event. ` +
         `Supply chain disruptions in semiconductors (TSM) represent a secondary propagation channel.\n\n` +
-        `_Analysis powered by Nexus AI — ShockGlobe Intelligence Platform_`
+        `_Analysis powered by Nexus AI — Intelligence Platform_`
       );
     }
 
@@ -361,7 +361,7 @@ INSTRUCTIONS:
     return (
       `**Nexus Intelligence Briefing**\n\n` +
       `Current primary event: **${event.title}** (Severity: ${event.severity}/10, Type: ${event.type})\n\n` +
-      `The ShockGlobe platform is tracking ${currentEvents.length} active events across ${new Set(currentEvents.flatMap((e) => e.affectedCountries)).size} countries. ` +
+      `The Nexus platform is tracking ${currentEvents.length} active events across ${new Set(currentEvents.flatMap((e) => e.affectedCountries)).size} countries. ` +
       `${SEED_SHOCKS.length} stock-event shock relationships are being monitored in real-time.\n\n` +
       `You can ask me about:\n` +
       `- **Risk exposure**: "Which stocks are most exposed?"\n` +
