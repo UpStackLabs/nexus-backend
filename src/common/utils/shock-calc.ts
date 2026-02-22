@@ -81,7 +81,6 @@ export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   Belgium: { lat: 50.85, lng: 4.35 },
   Ireland: { lat: 53.41, lng: -8.24 },
   'European Union': { lat: 50.85, lng: 4.35 },
-  Europe: { lat: 50.85, lng: 4.35 },
 
   // Additional ISO codes
   IN: { lat: 20.59, lng: 78.96 },
