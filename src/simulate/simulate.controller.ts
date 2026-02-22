@@ -31,7 +31,7 @@ export class SimulateController {
     status: 400,
     description: 'Invalid request body — validation errors.',
   })
-  runSimulation(@Body() dto: SimulateEventDto): SimulationResult {
+  async runSimulation(@Body() dto: SimulateEventDto): Promise<SimulationResult> {
     return this.simulateService.runSimulation(dto);
   }
 }

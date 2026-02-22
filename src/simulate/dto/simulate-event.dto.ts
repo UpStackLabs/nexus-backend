@@ -7,6 +7,7 @@ import {
   Max,
   ValidateNested,
   IsNotEmpty,
+  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -59,14 +60,14 @@ export class SimulateEventDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Detailed description of the what-if event scenario',
     example:
       'A hypothetical large-scale military escalation disrupting oil supply routes in the Strait of Hormuz.',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  description?: string;
 
   @ApiProperty({
     description: 'Category of the simulated event',

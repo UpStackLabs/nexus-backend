@@ -108,6 +108,16 @@ export class ShockGlobeGateway
     };
   }
 
+  @SubscribeMessage('subscribe:simulation')
+  handleSubscribeSimulation(client: Socket): { event: string; data: string } {
+    this.logger.log(`Client ${client.id} subscribed to simulation`);
+    client.join('simulation');
+    return {
+      event: 'subscribe:simulation',
+      data: 'Subscribed to simulation results',
+    };
+  }
+
   emitNewEvent(event: unknown): void {
     this.server.to('events').emit('events:new', event);
   }
@@ -122,5 +132,9 @@ export class ShockGlobeGateway
 
   emitSurpriseAlert(alert: unknown): void {
     this.server.to('surprises').emit('surprises:alert', alert);
+  }
+
+  emitSimulationResult(result: unknown): void {
+    this.server.to('simulation').emit('simulation:result', result);
   }
 }
