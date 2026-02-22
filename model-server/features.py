@@ -25,17 +25,28 @@ FEATURE_COLUMNS = [
     "volume_change",
 ]
 
-# All 31 seed-data tickers
-ALL_TICKERS = [
-    "XOM", "CVX", "COP", "BP", "SLB", "OXY",       # Energy
-    "LMT", "RTX", "NOC", "GD", "BA",                 # Defense / Aerospace
-    "JPM", "GS", "BAC", "MS",                         # Financials
-    "AAPL", "MSFT", "NVDA", "TSM",                    # Technology
-    "ADM", "BG", "CTVA",                               # Agriculture
-    "ZIM", "MATX", "DAC",                              # Shipping
-    "GLD", "TLT",                                      # ETFs
-    "VALE", "PBR", "ITUB", "AMX",                      # LatAm
-]
+# S&P 100 (OEX) components + original seed-data tickers, deduplicated
+ALL_TICKERS = sorted(set([
+    # --- S&P 100 components ---
+    "AAPL", "ABBV", "ABT", "ACN", "ADBE", "AIG", "AMGN", "AMT", "AMZN", "AVGO",
+    "AXP", "BA", "BAC", "BK", "BKNG", "BLK", "BMY", "BRK-B", "C", "CAT",
+    "CHTR", "CL", "CMCSA", "COF", "COP", "COST", "CRM", "CSCO", "CVS", "CVX",
+    "DE", "DHR", "DIS", "DOW", "DUK", "EMR", "EXC", "F", "FDX", "GD",
+    "GE", "GILD", "GM", "GOOG", "GOOGL", "GS", "HD", "HON", "IBM", "INTC",
+    "INTU", "JNJ", "JPM", "KHC", "KO", "LIN", "LLY", "LMT", "LOW", "MA",
+    "MCD", "MDLZ", "MDT", "MET", "META", "MMM", "MO", "MRK", "MS", "MSFT",
+    "NEE", "NFLX", "NKE", "NOC", "NVDA", "ORCL", "PEP", "PFE", "PG", "PM",
+    "PYPL", "QCOM", "RTX", "SBUX", "SCHW", "SO", "SPG", "T", "TGT", "TMO",
+    "TMUS", "TXN", "UNH", "UNP", "UPS", "USB", "V", "VZ", "WFC",
+    "WMT", "XOM",
+    # --- Original seed-data tickers (non-S&P 100) ---
+    "BP", "SLB", "OXY",                                # Energy
+    "TSM",                                               # Technology
+    "ADM", "BG", "CTVA",                                 # Agriculture
+    "ZIM", "MATX", "DAC",                                # Shipping
+    "GLD", "TLT",                                        # ETFs
+    "VALE", "PBR", "ITUB", "AMX",                        # LatAm
+]))
 
 
 # ---------------------------------------------------------------------------

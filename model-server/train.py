@@ -9,8 +9,9 @@ engineers features, trains a per-ticker LSTM model, and saves:
   models/{TICKER}/metadata.json — training metadata
 
 Usage:
-  python train.py                 # Train all 31 tickers
-  python train.py --ticker AAPL   # Train a single ticker
+  python train.py                        # Train all tickers
+  python train.py --ticker AAPL          # Train a single ticker
+  python train.py --skip-existing        # Only train tickers without models
 """
 
 from __future__ import annotations
@@ -188,9 +189,23 @@ def main():
         default=None,
         help="Train a single ticker (e.g. AAPL). Default: train all.",
     )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        default=False,
+        help="Skip tickers that already have a trained model in models/.",
+    )
     args = parser.parse_args()
 
     tickers = [args.ticker.upper()] if args.ticker else ALL_TICKERS
+
+    if args.skip_existing:
+        before = len(tickers)
+        tickers = [
+            t for t in tickers
+            if not (MODELS_DIR / t / "model.keras").exists()
+        ]
+        logger.info(f"--skip-existing: {before - len(tickers)} already trained, {len(tickers)} remaining")
 
     logger.info(f"Training {len(tickers)} ticker(s): {tickers}")
 
