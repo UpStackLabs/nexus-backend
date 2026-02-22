@@ -144,6 +144,53 @@ export class SphinxNlpService {
     throw new Error('No LLM provider available');
   }
 
+  /** Predict stock price trajectory using LSTM model server */
+  async predictPrice(
+    ticker: string,
+  ): Promise<{
+    predictions: Array<{
+      day: number;
+      price: number;
+      upper: number;
+      lower: number;
+    }>;
+    confidence: number;
+  } | null> {
+    if (!this.modelServerReachable) {
+      return null;
+    }
+    try {
+      const res = await axios.post<{
+        ticker: string;
+        predictions: Array<{
+          day: number;
+          price: number;
+          upper: number;
+          lower: number;
+        }>;
+        confidence: number;
+        inference_time_ms: number;
+      }>(
+        `${this.modelServerUrl}/predict-price`,
+        { ticker },
+        { timeout: 30_000 },
+      );
+      this.logger.log(
+        `LSTM prediction for ${ticker}: ${res.data.predictions.length} days, ` +
+          `confidence=${res.data.confidence}, inference=${res.data.inference_time_ms}ms`,
+      );
+      return {
+        predictions: res.data.predictions,
+        confidence: res.data.confidence,
+      };
+    } catch (err) {
+      this.logger.warn(
+        `LSTM price prediction failed for ${ticker}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   /** Predict shock impact using custom model server */
   async predictShock(features: {
     severity: number;
