@@ -14,7 +14,7 @@ import {
   buildArcsFromShocks,
 } from '../common/utils/shock-calc.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 
 @Injectable()
 export class SimulateService {
@@ -22,7 +22,7 @@ export class SimulateService {
 
   constructor(
     private readonly nlp: SphinxNlpService,
-    private readonly gateway: ShockGlobeGateway,
+    private readonly gateway: NexusGateway,
   ) {}
 
   /**

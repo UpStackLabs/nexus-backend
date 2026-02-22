@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ShockGlobeGateway } from './shockglobe.gateway.js';
+import { NexusGateway } from './nexus.gateway.js';
 
 @Module({
-  providers: [ShockGlobeGateway],
-  exports: [ShockGlobeGateway],
+  providers: [NexusGateway],
+  exports: [NexusGateway],
 })
 export class GatewayModule {}

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { MarketDataService } from './market-data.service.js';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 import axios from 'axios';
 
 jest.mock('axios');
@@ -38,7 +38,7 @@ function yahooChartResponse(symbol: string, price: number, prevClose: number) {
 
 describe('MarketDataService', () => {
   let service: MarketDataService;
-  let gateway: jest.Mocked<Partial<ShockGlobeGateway>>;
+  let gateway: jest.Mocked<Partial<NexusGateway>>;
   let configGet: jest.Mock;
 
   // ─── Seed fallback (Yahoo fails) ──────────────────────────────
@@ -52,7 +52,7 @@ describe('MarketDataService', () => {
         providers: [
           MarketDataService,
           { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
+          { provide: NexusGateway, useValue: gateway },
         ],
       }).compile();
 
@@ -101,7 +101,7 @@ describe('MarketDataService', () => {
         providers: [
           MarketDataService,
           { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
+          { provide: NexusGateway, useValue: gateway },
         ],
       }).compile();
 
@@ -151,7 +151,7 @@ describe('MarketDataService', () => {
         providers: [
           MarketDataService,
           { provide: ConfigService, useValue: { get: configGet } },
-          { provide: ShockGlobeGateway, useValue: gateway },
+          { provide: NexusGateway, useValue: gateway },
         ],
       }).compile();
 

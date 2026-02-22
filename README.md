@@ -1,8 +1,8 @@
-# ShockGlobe — Backend API
+# Nexus — Backend API
 
 **Hacklytics 2026 · Finance Track · Nexus**
 
-ShockGlobe is the backend for an interactive 3D globe that connects global events (geopolitical crises, military conflicts, economic shocks, policy changes) to their predicted market impacts across countries, sectors, and stocks.
+Nexus is the backend for an interactive 3D globe that connects global events (geopolitical crises, military conflicts, economic shocks, policy changes) to their predicted market impacts across countries, sectors, and stocks.
 
 Built with **NestJS 11 + TypeScript**. Swagger UI at `/api/docs`.
 

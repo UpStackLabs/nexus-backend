@@ -426,7 +426,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Nexus Model Server",
     description=(
-        "HuggingFace model inference layer for ShockGlobe. "
+        "HuggingFace model inference layer for Nexus. "
         "Wraps BART-MNLI zero-shot classification, MiniLM embeddings, "
         "rule-based shock prediction, and vision mock endpoints."
     ),

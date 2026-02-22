@@ -111,7 +111,7 @@ export class NewsIngestionService {
       }>('https://newsapi.org/v2/everything', {
         headers: {
           'X-Api-Key': apiKey,
-          'User-Agent': 'Mozilla/5.0 (compatible; ShockGlobe/1.0)',
+          'User-Agent': 'Mozilla/5.0 (compatible; Nexus/1.0)',
         },
         params: {
           q: 'geopolitical OR sanctions OR military OR "economic crisis"',

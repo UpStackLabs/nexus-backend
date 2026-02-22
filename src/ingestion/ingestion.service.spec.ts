@@ -3,7 +3,7 @@ import { IngestionService } from './ingestion.service.js';
 import { NewsIngestionService } from './news-ingestion.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 import { EventsService } from '../events/events.service.js';
 import type { RawNewsItem } from './news-ingestion.service.js';
 
@@ -12,7 +12,7 @@ describe('IngestionService', () => {
   let newsIngestion: jest.Mocked<Partial<NewsIngestionService>>;
   let nlp: jest.Mocked<Partial<SphinxNlpService>>;
   let vectorDb: jest.Mocked<Partial<VectorDbService>>;
-  let gateway: jest.Mocked<Partial<ShockGlobeGateway>>;
+  let gateway: jest.Mocked<Partial<NexusGateway>>;
 
   const mockNewsItems: RawNewsItem[] = [
     {
@@ -62,7 +62,7 @@ describe('IngestionService', () => {
         { provide: NewsIngestionService, useValue: newsIngestion },
         { provide: SphinxNlpService, useValue: nlp },
         { provide: VectorDbService, useValue: vectorDb },
-        { provide: ShockGlobeGateway, useValue: gateway },
+        { provide: NexusGateway, useValue: gateway },
         { provide: EventsService, useValue: { addEvent: jest.fn() } },
       ],
     }).compile();

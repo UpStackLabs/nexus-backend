@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 import { SEED_STOCKS } from '../common/data/seed-data.js';
 import type { LivePrice, HistoricalCandle } from '../common/types/index.js';
 
@@ -46,7 +46,7 @@ export class MarketDataService implements OnModuleInit {
 
   constructor(
     private readonly config: ConfigService,
-    private readonly gateway: ShockGlobeGateway,
+    private readonly gateway: NexusGateway,
   ) {}
 
   async onModuleInit(): Promise<void> {

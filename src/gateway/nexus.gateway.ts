@@ -17,7 +17,7 @@ import type { Stock } from '../common/types/index.js';
     origin: '*',
   },
 })
-export class ShockGlobeGateway
+export class NexusGateway
   implements
     OnGatewayInit,
     OnGatewayConnection,
@@ -27,13 +27,13 @@ export class ShockGlobeGateway
   @WebSocketServer()
   server: Server;
 
-  private readonly logger = new Logger(ShockGlobeGateway.name);
+  private readonly logger = new Logger(NexusGateway.name);
   private mockInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
   afterInit(): void {
-    this.logger.log('ShockGlobe WebSocket Gateway initialized');
+    this.logger.log('Nexus WebSocket Gateway initialized');
   }
 
   handleConnection(client: Socket): void {

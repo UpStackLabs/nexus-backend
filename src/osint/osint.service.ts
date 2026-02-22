@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 import { VisionService } from '../vision/vision.service.js';
 import type { VisionAnalysisResult } from '../vision/vision.service.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -32,7 +32,7 @@ export class OsintService {
     private readonly vision: VisionService,
     private readonly nlp: SphinxNlpService,
     private readonly vectorDb: VectorDbService,
-    private readonly gateway: ShockGlobeGateway,
+    private readonly gateway: NexusGateway,
   ) {}
 
   async analyzeImage(

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-ShockGlobe backend — NestJS 11 + TypeScript API for an interactive 3D globe that visualizes how global events propagate as financial market shockwaves. Built for **Hacklytics 2026** (Finance track) by **Nexus**.
+Nexus backend — NestJS 11 + TypeScript API for an interactive 3D globe that visualizes how global events propagate as financial market shockwaves. Built for **Hacklytics 2026** (Finance track) by **Nexus**.
 
 The app runs without any API keys — every service falls back to seed data in `common/data/seed-data.ts` automatically.
 

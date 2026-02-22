@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { NewsIngestionService, RawNewsItem } from './news-ingestion.service.js';
 import { SphinxNlpService } from '../nlp/sphinx-nlp.service.js';
 import { VectorDbService } from '../vector-db/vector-db.service.js';
-import { ShockGlobeGateway } from '../gateway/shockglobe.gateway.js';
+import { NexusGateway } from '../gateway/nexus.gateway.js';
 import { EventsService } from '../events/events.service.js';
 import { GlobeService } from '../globe/globe.service.js';
 import { COUNTRY_COORDS, EVENT_SECTOR_MAP, calculateStockShock } from '../common/utils/shock-calc.js';
@@ -27,7 +27,7 @@ export class IngestionService implements OnModuleInit {
     private readonly newsIngestion: NewsIngestionService,
     private readonly nlp: SphinxNlpService,
     private readonly vectorDb: VectorDbService,
-    private readonly gateway: ShockGlobeGateway,
+    private readonly gateway: NexusGateway,
     private readonly eventsService: EventsService,
     private readonly globeService: GlobeService,
   ) {}
