@@ -2,6 +2,7 @@ import type { ShockEvent } from '../types/event.types.js';
 import type { Stock } from '../types/stock.types.js';
 import type { ShockScore } from '../types/shock.types.js';
 import type { HeatmapEntry, ConnectionArc } from '../types/globe.types.js';
+import { SP100_NEW_STOCKS, SP100_NEW_SHOCKS } from './sp100-stocks.js';
 
 // ---------------------------------------------------------------------------
 // 1. SEED EVENTS
@@ -44,43 +45,35 @@ export const SEED_EVENTS: ShockEvent[] = [
       'Energy',
       'Defense',
       'Finance',
+      'Technology',
+      'Healthcare',
+      'Industrials',
+      'Consumer Discretionary',
+      'Consumer Staples',
       'Agriculture',
       'Shipping',
-      'Technology',
       'Mining',
+      'Utilities',
+      'Materials',
+      'Telecommunications',
+      'Real Estate',
     ],
     affectedTickers: [
-      'XOM',
-      'CVX',
-      'COP',
-      'BP',
-      'SLB',
-      'OXY',
-      'LMT',
-      'RTX',
-      'NOC',
-      'GD',
-      'BA',
-      'JPM',
-      'GS',
-      'BAC',
-      'MS',
-      'AAPL',
-      'MSFT',
-      'NVDA',
-      'TSM',
-      'ADM',
-      'BG',
-      'CTVA',
-      'ZIM',
-      'MATX',
-      'DAC',
-      'GLD',
-      'TLT',
-      'VALE',
-      'PBR',
-      'ITUB',
-      'AMX',
+      'XOM', 'CVX', 'COP', 'BP', 'SLB', 'OXY',
+      'LMT', 'RTX', 'NOC', 'GD', 'BA',
+      'JPM', 'GS', 'BAC', 'MS', 'C', 'WFC', 'BRK-B', 'AXP', 'BLK', 'MA', 'V',
+      'AAPL', 'MSFT', 'NVDA', 'TSM', 'AMZN', 'GOOG', 'META', 'AVGO', 'CRM', 'ORCL',
+      'JNJ', 'UNH', 'LLY', 'PFE', 'ABBV', 'MRK', 'TMO',
+      'CAT', 'DE', 'HON', 'GE', 'UNP', 'FDX',
+      'HD', 'MCD', 'NKE', 'DIS', 'LOW', 'SBUX',
+      'PG', 'KO', 'PEP', 'COST', 'WMT', 'PM',
+      'ADM', 'BG', 'CTVA',
+      'ZIM', 'MATX', 'DAC',
+      'GLD', 'TLT',
+      'VALE', 'PBR', 'ITUB', 'AMX',
+      'NEE', 'DUK', 'SO',
+      'DOW', 'LIN',
+      'T', 'TMUS', 'VZ',
     ],
     isSimulated: true,
   },
@@ -223,10 +216,11 @@ export const SEED_EVENTS: ShockEvent[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 2. SEED STOCKS (~30 stocks across sectors)
+// 2. SEED STOCKS (S&P 100 + original seed tickers)
 // ---------------------------------------------------------------------------
 
 export const SEED_STOCKS: Stock[] = [
+  ...SP100_NEW_STOCKS,
   // ---- Energy ----
   {
     ticker: 'XOM',
@@ -648,10 +642,11 @@ export const SEED_STOCKS: Stock[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 3. SEED SHOCKS  (Venezuelan Invasion evt-001 -> all 31 stocks)
+// 3. SEED SHOCKS  (Venezuelan Invasion evt-001 -> all stocks)
 // ---------------------------------------------------------------------------
 
 export const SEED_SHOCKS: ShockScore[] = [
+  ...SP100_NEW_SHOCKS,
   // ---- Energy (surge: supply disruption, Venezuela = major OPEC producer) ----
   {
     eventId: 'evt-001',
