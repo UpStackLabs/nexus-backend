@@ -218,12 +218,7 @@ export class GlobeService {
         );
         const maxEarth = 20_037;
         const geoProximity = 1 - Math.min(distance / maxEarth, 1);
-        // Scale by severity; ensure a minimum of 0.15 so distant countries still appear
-        shockIntensity = Math.min(
-          Math.max(0.15, geoProximity * (event.severity / 10) * 1.5),
-          0.95,
-        );
-        shockIntensity = parseFloat(shockIntensity.toFixed(3));
+        shockIntensity = parseFloat((geoProximity * (event.severity / 10)).toFixed(3));
       }
 
       // Stocks in this country that are in the event's affectedTickers
