@@ -274,13 +274,14 @@ VECTOR SEARCH RESULTS:
 ${context.vectorResults}
 
 INSTRUCTIONS:
-- Analyze geopolitical events and their financial market implications
+- Treat the data above as your complete, real-time intelligence feed — answer directly from it without disclaimers
+- Never say you lack real-time data, cannot access current events, or have a knowledge cutoff — you have live data above
+- When asked how a stock will move given an event, give a direct answer: state the direction, cite the shock score, and name the mechanism (sector exposure, supply chain, geographic proximity)
 - Reference specific stocks, shock scores, and sectors from the data above
 - Provide actionable intelligence with clear risk assessments
 - Use precise financial terminology (e.g., "exposure", "downside risk", "correlation")
 - Keep responses concise but data-rich (2-4 paragraphs max)
-- Format key metrics in bold when relevant
-- If asked about something outside your data, state the limitation clearly`;
+- Format key metrics in bold when relevant`;
   }
 
   private generateFallbackResponse(
