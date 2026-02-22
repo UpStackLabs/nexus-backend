@@ -216,8 +216,8 @@ export class StocksService {
 
     const rng = mulberry32(seed);
 
-    // Volatility derived from the stock's daily percent change (clamped 0.5–4 %).
-    const dailyVol = Math.max(0.005, Math.min(0.04, Math.abs(stock.priceChangePercent) / 100 || 0.015));
+    // Volatility derived from the stock's daily percent change (clamped 2–10 %).
+    const dailyVol = Math.max(0.02, Math.min(0.10, Math.abs(stock.priceChangePercent) / 25 || 0.04));
 
     interface TimeframeCfg {
       points: number;
@@ -256,18 +256,20 @@ export class StocksService {
     const now = Date.now();
     const endMs = now - intervalMs; // end one interval before "now" so last point is not the live price
 
-    // Start price is ~95 % of current, then we random-walk forward to current.
-    let price = stock.price * 0.95;
+    // Start price is ~88 % of current, then we random-walk forward to current.
+    let price = stock.price * (0.85 + rng() * 0.10);
     const result: { date: string; price: number; volume: number }[] = [];
+    let momentum = 0; // adds trending runs to the walk
 
     for (let i = 0; i < points; i++) {
       const pointMs = endMs - (points - 1 - i) * intervalMs;
       const date = formatDate(new Date(pointMs), fmt);
 
-      // Geometric Brownian Motion step
-      const drift = (stock.priceChange / stock.price) / points; // slight trend toward current price
-      const shock = dailyVol * (rng() * 2 - 1);
-      price = price * (1 + drift + shock);
+      // Geometric Brownian Motion step with momentum for realistic trending
+      const drift = (stock.priceChange / stock.price) / points;
+      const rawShock = dailyVol * (rng() * 2 - 1);
+      momentum = 0.4 * momentum + 0.6 * rawShock; // smooth for trending runs
+      price = price * (1 + drift + momentum);
       price = Math.max(price, 0.01); // prevent negative
 
       // Volume: uniform random around base volume ±30 %
