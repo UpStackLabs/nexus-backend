@@ -17,13 +17,14 @@ export interface NewsDisplayItem {
 }
 
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const EMPTY_RETRY_MS = 60 * 1000; // retry after 1 minute when cache is empty
+const EMPTY_RETRY_MS = 10 * 60 * 1000; // retry after 10 minutes when cache is empty (avoids hammering rate-limited APIs)
 
 @Injectable()
 export class NewsIngestionService {
   private readonly logger = new Logger(NewsIngestionService.name);
 
   private cache: { items: RawNewsItem[]; fetchedAt: number } | null = null;
+  private pendingFetch: Promise<RawNewsItem[]> | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -49,14 +50,23 @@ export class NewsIngestionService {
         return this.cache.items;
       }
     }
-    const items = await this.fetchAll(new Date(0));
-    // Keep stale cache if new fetch returns empty but we had data before
-    if (items.length > 0 || !this.cache) {
-      this.cache = { items, fetchedAt: Date.now() };
-    } else {
-      this.logger.warn('All news sources returned 0 items — serving stale cache');
+    // Deduplicate concurrent callers — share one in-flight fetch instead of firing N parallel requests
+    if (this.pendingFetch) {
+      return this.pendingFetch;
     }
-    return this.cache.items;
+    this.pendingFetch = this.fetchAll(new Date(0))
+      .then((items) => {
+        if (items.length > 0 || !this.cache) {
+          this.cache = { items, fetchedAt: Date.now() };
+        } else {
+          this.logger.warn('All news sources returned 0 items — serving stale cache');
+        }
+        return this.cache!.items;
+      })
+      .finally(() => {
+        this.pendingFetch = null;
+      });
+    return this.pendingFetch;
   }
 
   async fetchGdelt(_since: Date): Promise<RawNewsItem[]> {
@@ -66,10 +76,10 @@ export class NewsIngestionService {
       }>('https://api.gdeltproject.org/api/v2/doc/doc', {
         params: {
           mode: 'artlist',
-          maxrecords: 50,
+          maxrecords: 25,
           format: 'json',
-          query: '(geopolitical OR military OR sanctions OR "trade war" OR crisis)',
-          timespan: '3d',
+          query: 'geopolitical military sanctions crisis',
+          timespan: '1d',
           sort: 'DateDesc',
         },
         timeout: 30000,
@@ -91,7 +101,6 @@ export class NewsIngestionService {
   async fetchNewsApi(_since: Date): Promise<RawNewsItem[]> {
     const apiKey = this.config.get<string>('NEWSAPI_KEY');
     if (!apiKey) return [];
-    const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     try {
       const response = await axios.get<{
         articles?: {
@@ -100,10 +109,12 @@ export class NewsIngestionService {
           publishedAt: string;
         }[];
       }>('https://newsapi.org/v2/everything', {
-        headers: { 'X-Api-Key': apiKey },
+        headers: {
+          'X-Api-Key': apiKey,
+          'User-Agent': 'Mozilla/5.0 (compatible; ShockGlobe/1.0)',
+        },
         params: {
           q: 'geopolitical OR sanctions OR military OR "economic crisis"',
-          from,
           sortBy: 'publishedAt',
           pageSize: 25,
         },
@@ -134,7 +145,7 @@ export class NewsIngestionService {
           notes: string;
           country: string;
         }[];
-      }>('https://api.acleddata.com/acled/read', {
+      }>('https://developer.acleddata.com/acled/read/', {
         params: {
           key,
           email,
@@ -158,12 +169,11 @@ export class NewsIngestionService {
   }
 
   async fetchAll(since: Date): Promise<RawNewsItem[]> {
-    const [gdelt, newsapi, acled] = await Promise.all([
+    const [gdelt, newsapi] = await Promise.all([
       this.fetchGdelt(since),
       this.fetchNewsApi(since),
-      this.fetchAcled(since),
     ]);
-    const combined = [...gdelt, ...newsapi, ...acled];
+    const combined = [...gdelt, ...newsapi];
     const seen = new Set<string>();
     return combined.filter((item) => {
       const key = item.title.toLowerCase().slice(0, 60);

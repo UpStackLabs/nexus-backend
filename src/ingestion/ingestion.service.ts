@@ -38,7 +38,7 @@ export class IngestionService implements OnModuleInit {
     );
   }
 
-  @Cron('0 */5 * * * *')
+  @Cron('0 */10 * * * *')
   async runScheduledIngestion(): Promise<void> {
     const summary = await this.runManualIngestion();
     this.logger.log(
