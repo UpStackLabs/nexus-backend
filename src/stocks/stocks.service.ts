@@ -363,14 +363,25 @@ export class StocksService {
       // output is often inaccurate, causing a visible spike when merging
       // with the current live price on the chart.
       const now = new Date();
-      trajectory = lstmResult.predictions.slice(1, days + 1).map((p) => {
+      const rawPoints = lstmResult.predictions.slice(1, days + 1);
+      const totalDays = rawPoints.length;
+      const shockBlendWeight = 0.4;
+      const { predictedPriceChange, direction } = shockAnalysis;
+      // predictedPriceChange is already signed (+/-) by the shock engine
+      const directionSign = direction === 'up' ? 1 : -1;
+      const signedChange = Math.abs(predictedPriceChange) * directionSign;
+
+      trajectory = rawPoints.map((p, i) => {
         const date = new Date(now);
         date.setDate(date.getDate() + p.day);
+        // Phase in shock contribution linearly so day 1 is mostly LSTM
+        // and the final day carries the full blended shock effect
+        const shockAdj = currentPrice * (signedChange / 100) * ((i + 1) / totalDays) * shockBlendWeight;
         return {
           date: date.toISOString().slice(0, 10),
-          price: p.price,
-          upper: p.upper,
-          lower: p.lower,
+          price: Math.round((p.price + shockAdj) * 100) / 100,
+          upper: Math.round((p.upper + shockAdj) * 100) / 100,
+          lower: Math.round((p.lower + shockAdj) * 100) / 100,
         };
       });
       confidence = lstmResult.confidence;
@@ -493,19 +504,21 @@ export class StocksService {
       .map((e) => `${e.title} (severity ${e.severity}/10)`)
       .join('; ');
 
+    const shockSentiment = shockAnalysis.direction === 'up' ? 'BULLISH' : 'BEARISH';
+
     const prompt = `You are a financial analyst. Write a concise 2-3 sentence prediction summary for ${stock.companyName} (${stock.ticker}).
-Current price: $${currentPrice}. Predicted ${trajectory.length}-day price: $${lastPoint.price} (${priceChange}%).
-Shock score: ${shockAnalysis.compositeShockScore}, risk level: ${shockAnalysis.riskLevel}.
+Shock factor sentiment: ${shockSentiment} (composite score: ${shockAnalysis.compositeShockScore}, risk: ${shockAnalysis.riskLevel}).
 Key events: ${eventSummary}.
-Focus on the key drivers and risk factors. Be direct and quantitative.`;
+Current price: $${currentPrice}. LSTM model 30-day target: $${lastPoint.price} (${priceChange}%).
+Write from the ${shockSentiment} perspective. Lead with the shock-driven outlook and its causes. Mention the price model only as a secondary data point. Do not open with the price increase if sentiment is bearish. Be direct and quantitative.`;
 
     try {
       const narrative = await this.nlp.generateText(prompt);
       return narrative;
     } catch {
       this.logger.debug('AI narrative generation failed, using template');
-      const direction = parseFloat(priceChange) >= 0 ? 'upward' : 'downward';
-      return `${stock.companyName} is projected to move ${direction} by ${Math.abs(parseFloat(priceChange))}% over the next ${trajectory.length} days, driven by a composite shock score of ${shockAnalysis.compositeShockScore} (${shockAnalysis.riskLevel} risk). Key events influencing this forecast include ${relevantEvents[0]?.title ?? 'global market conditions'}.`;
+      const directionWord = shockAnalysis.direction === 'up' ? 'upward' : 'downward';
+      return `${stock.companyName} faces ${shockSentiment.toLowerCase()} pressure over the next ${trajectory.length} days, with shock factors pointing ${directionWord} (composite score: ${shockAnalysis.compositeShockScore}, ${shockAnalysis.riskLevel} risk). Key drivers include ${relevantEvents[0]?.title ?? 'global market conditions'}, with a model-estimated price of $${lastPoint.price} (${priceChange}%).`;
     }
   }
 }
