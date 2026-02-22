@@ -337,20 +337,11 @@ export class StocksService {
     const livePrice = await this.marketData.getPrice(ticker.toUpperCase());
     const currentPrice = livePrice.price;
 
-    // 2. Compute shock analysis (needed for shockFactors + narrative regardless of source)
+    // 2. Compute shock analysis (needed for relevant events + composite score)
     const { relevantEvents, shockAnalysis } =
       await this.shockEngine.computeAnalysis(stock, currentPrice);
 
-    // 3. Build shock factors
-    const shockFactors: ShockFactor[] = relevantEvents.slice(0, 5).map((e) => ({
-      eventTitle: e.title,
-      type: e.type,
-      severity: e.severity,
-      impactScore: parseFloat((e.vectorSimilarity * shockAnalysis.compositeShockScore).toFixed(3)),
-      direction: shockAnalysis.direction,
-    }));
-
-    // 4. Try LSTM model first, fall back to GBM
+    // 3. Try LSTM model first, fall back to GBM
     let trajectory: PredictionPoint[];
     let confidence: number;
     let source: 'lstm' | 'gbm';
@@ -363,31 +354,20 @@ export class StocksService {
       // output is often inaccurate, causing a visible spike when merging
       // with the current live price on the chart.
       const now = new Date();
-      const rawPoints = lstmResult.predictions.slice(1, days + 1);
-      const totalDays = rawPoints.length;
-      const shockBlendWeight = 0.4;
-      const { predictedPriceChange, direction } = shockAnalysis;
-      // predictedPriceChange is already signed (+/-) by the shock engine
-      const directionSign = direction === 'up' ? 1 : -1;
-      const signedChange = Math.abs(predictedPriceChange) * directionSign;
-
-      trajectory = rawPoints.map((p, i) => {
+      trajectory = lstmResult.predictions.slice(1, days + 1).map((p) => {
         const date = new Date(now);
         date.setDate(date.getDate() + p.day);
-        // Phase in shock contribution linearly so day 1 is mostly LSTM
-        // and the final day carries the full blended shock effect
-        const shockAdj = currentPrice * (signedChange / 100) * ((i + 1) / totalDays) * shockBlendWeight;
         return {
           date: date.toISOString().slice(0, 10),
-          price: Math.round((p.price + shockAdj) * 100) / 100,
-          upper: Math.round((p.upper + shockAdj) * 100) / 100,
-          lower: Math.round((p.lower + shockAdj) * 100) / 100,
+          price: p.price,
+          upper: p.upper,
+          lower: p.lower,
         };
       });
       confidence = lstmResult.confidence;
       source = 'lstm';
     } else {
-      // Fallback to GBM
+      // Fallback to GBM (already shock-aligned internally)
       const gbmResult = this.predictTrajectoryGBM(
         stock,
         currentPrice,
@@ -404,12 +384,26 @@ export class StocksService {
       `Prediction for ${ticker}: source=${source}, days=${trajectory.length}, confidence=${confidence}`,
     );
 
-    // 5. Generate AI narrative
+    // 4. Find direction shock factors
+    const lastPrice = trajectory[trajectory.length - 1].price;
+    const trajectoryDirection: 'up' | 'down' = lastPrice >= currentPrice ? 'up' : 'down';
+
+    // 5. Build shock factors aligned to trajectory direction
+    const shockFactors: ShockFactor[] = relevantEvents.slice(0, 5).map((e) => ({
+      eventTitle: e.title,
+      type: e.type,
+      severity: e.severity,
+      impactScore: parseFloat((e.vectorSimilarity * shockAnalysis.compositeShockScore).toFixed(3)),
+      direction: trajectoryDirection,
+    }));
+
+    // 6. Generate AI narrative with trajectory-aligned direction
+    const alignedShockAnalysis = { ...shockAnalysis, direction: trajectoryDirection };
     const aiSummary = await this.generatePredictionNarrative(
       stock,
       currentPrice,
       trajectory,
-      shockAnalysis,
+      alignedShockAnalysis,
       relevantEvents,
     );
 

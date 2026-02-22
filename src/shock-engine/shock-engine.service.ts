@@ -57,20 +57,47 @@ export class ShockEngineService {
       };
     });
 
-    // Fallback to current events when vector DB has no results
+    // Fallback: score every event by H + G + SC (same formula, neutral sim=0.5)
+    // so each stock gets events ranked by actual relevance, not list order
     if (relevantEvents.length === 0) {
-      allEvents.slice(0, 3).forEach((e) => {
-        relevantEvents.push({
-          eventId: e.id,
-          title: e.title,
-          type: e.type,
-          severity: e.severity,
-          location: e.location,
-          timestamp: e.timestamp,
-          vectorSimilarity: parseFloat((Math.random() * 0.3 + 0.5).toFixed(3)),
-          description: e.description ?? '',
-        });
+      const scored = allEvents.map((e) => {
+        const shocks = SEED_SHOCKS.filter(
+          (s) => s.ticker === stock.ticker && s.eventId === e.id,
+        );
+        const H =
+          shocks.length > 0
+            ? shocks.reduce((sum, s) => sum + s.historicalSensitivity, 0) / shocks.length
+            : 0.5;
+
+        const distance = this.haversineDistance(
+          e.location.lat, e.location.lng,
+          stock.location.lat, stock.location.lng,
+        );
+        const G = parseFloat((1 - Math.min(distance / 20037, 1)).toFixed(3));
+
+        const affectedSectors = EVENT_SECTOR_MAP[e.type] ?? [];
+        const sectorIndex = affectedSectors.indexOf(stock.sector);
+        const SC = sectorIndex >= 0 ? 1 - sectorIndex / (affectedSectors.length + 1) : 0.1;
+
+        const relevanceScore = parseFloat((0.35 * 0.5 + 0.25 * H + 0.2 * G + 0.2 * SC).toFixed(3));
+        return { e, relevanceScore };
       });
+
+      scored
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, 10)
+        .forEach(({ e, relevanceScore }) => {
+          relevantEvents.push({
+            eventId: e.id,
+            title: e.title,
+            type: e.type,
+            severity: e.severity,
+            location: e.location,
+            timestamp: e.timestamp,
+            vectorSimilarity: relevanceScore,
+            description: e.description ?? '',
+          });
+        });
     }
 
     // Compute S(c,e) for top-3 events
