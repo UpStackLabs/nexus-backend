@@ -50,6 +50,8 @@ export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   KR: { lat: 37.57, lng: 126.98 },
   FR: { lat: 48.86, lng: 2.35 },
   BE: { lat: 50.85, lng: 4.35 },
+  IE: { lat: 53.41, lng: -8.24 },
+  EU: { lat: 50.85, lng: 4.35 }, // EU-wide events mapped to Brussels
 
   // Full country names (mapped to same coords)
   USA: { lat: 39.83, lng: -98.58 },
@@ -77,6 +79,9 @@ export const COUNTRY_COORDS: Record<string, { lat: number; lng: number }> = {
   'South Korea': { lat: 37.57, lng: 126.98 },
   France: { lat: 48.86, lng: 2.35 },
   Belgium: { lat: 50.85, lng: 4.35 },
+  Ireland: { lat: 53.41, lng: -8.24 },
+  'European Union': { lat: 50.85, lng: 4.35 },
+  Europe: { lat: 50.85, lng: 4.35 },
 
   // Additional ISO codes
   IN: { lat: 20.59, lng: 78.96 },
