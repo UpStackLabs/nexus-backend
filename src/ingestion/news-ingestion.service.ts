@@ -69,6 +69,13 @@ export class NewsIngestionService {
     return this.pendingFetch;
   }
 
+  /** Parses GDELT's compact date format "20260220T063400Z" to an ISO string. */
+  private parseGdeltDate(seendate: string): string {
+    const m = seendate.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+    if (!m) return new Date().toISOString();
+    return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`).toISOString();
+  }
+
   async fetchGdelt(_since: Date): Promise<RawNewsItem[]> {
     try {
       const response = await axios.get<{
@@ -90,7 +97,7 @@ export class NewsIngestionService {
         description: '',
         rawText: a.title ?? '',
         source: a.domain ?? 'gdelt',
-        publishedAt: new Date().toISOString(),
+        publishedAt: a.seendate ? this.parseGdeltDate(a.seendate) : new Date().toISOString(),
       }));
     } catch (err) {
       this.logger.warn(`GDELT fetch failed: ${(err as Error).message}`);
