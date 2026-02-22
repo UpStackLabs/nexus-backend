@@ -358,8 +358,11 @@ export class StocksService {
 
     if (lstmResult) {
       // LSTM succeeded — map predictions to PredictionPoint[] with dates
+      // Skip the first prediction point (day 1) because the LSTM's initial
+      // output is often inaccurate, causing a visible spike when merging
+      // with the current live price on the chart.
       const now = new Date();
-      trajectory = lstmResult.predictions.slice(0, days).map((p) => {
+      trajectory = lstmResult.predictions.slice(1, days + 1).map((p) => {
         const date = new Date(now);
         date.setDate(date.getDate() + p.day);
         return {
